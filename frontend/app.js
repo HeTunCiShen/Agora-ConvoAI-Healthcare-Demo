@@ -15,6 +15,7 @@
   let agoraChannelInfo = null;
   let agentUID = null;
   let agentState = 'idle';
+  let chatManager = null;
 
   // UI Elements
   const joinBtn = document.getElementById('join');
@@ -52,9 +53,12 @@
       joinBtn.addEventListener('click', handleStartClick);
       leaveBtn.addEventListener('click', handleStopClick);
       
-      // Step 4 - Show UI elements by default with offline state
-      showUIElements();
-      updateAgentStateUI('offline');
+      // Step 4 - Initialize chat manager
+      chatManager = new ChatManager();
+      if (chatManager.initialize()) {
+        console.log('Chat manager initialized successfully');
+      }
+      
     }catch (e) {  
       console.error('Init failed', e);
     }
@@ -68,6 +72,10 @@
     try { 
       if (!agoraChannelInfo) return alert('Channel info not initialized');
       
+      // Join Agora RTC and RTM channels
+      await joinRTCChannel(agoraChannelInfo.appId, agoraChannelInfo.channel, agoraChannelInfo.uid, agoraChannelInfo.token);
+      await joinRTMChannel(agoraChannelInfo.channel, agoraChannelInfo.uid, agoraChannelInfo.token);
+
       // Start ConvoAI agent via API
       const response = await API.agora.startConversation({
         channel: agoraChannelInfo.channel,
@@ -78,9 +86,6 @@
       agoraConvoAIAgentID = response.agentId;
       agentUID = response.agentUid;
 
-      // Join Agora RTC and RTM channels
-      await joinRTCChannel(agoraChannelInfo.appId, agoraChannelInfo.channel, agoraChannelInfo.uid, agoraChannelInfo.token);
-      await joinRTMChannel(agoraChannelInfo.channel, agoraChannelInfo.uid, agoraChannelInfo.token);
       
     }catch (e) {
       console.error('Failed to start ConvoAI agent', e);
@@ -91,6 +96,12 @@
   async function stopAgoraConvoAIAgent() {
     try { 
       if (!agoraConvoAIAgentID) return;
+
+      // Leave Agora RTC and RTM channels
+      if (rtcJoined) {
+        await rtcLeaveChannel();
+        await rtmLeaveChannel();
+      }
       
       // Update the UI immediately for better UX
       onConversationStopped();
@@ -100,15 +111,6 @@
       agoraConvoAIAgentID = null;
       agentUID = null;
       agentState = 'idle';
-      
-      // Leave Agora RTC and RTM channels
-      if (rtcJoined) {
-        await rtcClient.leave();
-        rtcJoined = false;
-      }
-      if (rtmClient) {
-        await rtmClient.logout();
-      }
       
     }catch (e) {
       console.error('Failed to stop ConvoAI agent', e);
@@ -139,6 +141,15 @@
       await rtcClient.subscribe(user, mediaType);
       user.audioTrack.play();
     }
+  }
+
+  async function rtcLeaveChannel() { 
+    if (rtcLocalAudioTrack) {
+      rtcLocalAudioTrack.close();
+      rtcLocalAudioTrack = null;
+    }
+    await rtcClient.leave();
+    rtcJoined = false;
   }
 
   function handleRTCUserPublished(user, mediaType) {
@@ -186,10 +197,39 @@
     }
   }
 
+   async function rtmLeaveChannel() { 
+    try {
+        const unsubResult = await rtmClient.unsubscribe(agoraChannel);
+      
+        console.log('RTM unsubscribe result:' + unsubResult);
+    } catch (status) {
+        console.log(status);
+    }
+  }
+
   function handleRTMMessage(event) {
     try {
       console.log('RTM message received:', event);
-      // Handle custom RTM messages here
+      
+      // Handle custom RTM messages and pass to chat manager
+      if (event.channelType === 'MESSAGE' && event.channelName === agoraChannel) {
+        const message = event.message;
+        
+        // Try to parse JSON message for transcriptions
+        if (typeof message === 'string') {
+          try {
+            const parsedMessage = JSON.parse(message);
+            console.log('Parsed RTM message:', parsedMessage);
+            
+            // Pass to chat manager if available
+            if (chatManager && parsedMessage) {
+              chatManager.receiveRtmMessage(parsedMessage);
+            }
+          } catch (e) {
+            console.log('Message is not JSON:', message);
+          }
+        }
+      }
     } catch (error) {
       console.error('Error handling RTM message:', error);
     }
@@ -221,6 +261,37 @@
   }
 
   // ===========================
+  // TEXT MESSAGING FUNCTIONS
+  // ===========================
+
+  async function sendTextMessage(text) {
+    try {
+      if (!rtmClient || !agoraChannel || !rtcJoined) {
+        throw new Error('RTM client not initialized or not connected to channel');
+      }
+
+      // Publish message with custom type for user transcription
+      await rtmClient.publish(
+        agoraChannel,
+        text,
+        {
+          customType: "user.transcription"
+        }
+      );
+
+      console.log('Text message sent via RTM:', text);
+      return true;
+
+    } catch (error) {
+      console.error('Failed to send text message via RTM:', error);
+      throw error;
+    }
+  }
+
+  // Make sendTextMessage function available to chat manager
+  window.sendTextMessage = sendTextMessage;
+
+  // ===========================
   // UI MANAGEMENT (Demo Features)
   // ===========================
 
@@ -242,7 +313,13 @@
     leaveBtn.disabled = false;
     
     // Set agent state to idle but keep UI visible
-    updateAgentStateUI('online'); 
+    updateAgentStateUI('speaking'); 
+
+    // Enable chat when connected
+    if (chatManager) {
+      chatManager.enableChat();
+      chatManager.startNewSession();
+    }
   }
 
   function onConversationStopped() {
@@ -253,6 +330,12 @@
     
     // Set agent state to offline but keep UI visible
     updateAgentStateUI('offline');
+
+    // Disable chat when disconnected
+    if (chatManager) {
+      chatManager.disableChat();
+      chatManager.endSession();
+    }
   }
   
   function onConversationError() {
@@ -266,16 +349,6 @@
       button.classList.add('loading');
     } else {
       button.classList.remove('loading');
-    }
-  }
-
-  function showUIElements() {
-    const agentStateEl = document.getElementById('agent-state');
-    if (agentStateEl) agentStateEl.style.display = 'flex';
-    
-    // Show audio visualizer (demo feature)
-    if (window.audioVisualizer) {
-      window.audioVisualizer.show();
     }
   }
 

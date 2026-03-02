@@ -148,6 +148,7 @@ const startConversation = async (req, res) => {
         },
         parameters: {
           data_channel: "rtm",
+          audio_scenario: "chorus",
           transcript: {
             redundant: false
           },
