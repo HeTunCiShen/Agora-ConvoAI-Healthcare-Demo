@@ -28,8 +28,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Apply Basic Authentication to all routes below
-app.use(basicAuth);
 
 app.use(express.static(path.join(__dirname, '../frontend'), {
   setHeaders: (res, path) => {
@@ -49,9 +47,12 @@ app.use('/lib', express.static(path.join(__dirname, '../node_modules'), {
   }
 }));
 
+// Apply Basic Authentication to API routes only
+app.use('/api', basicAuth);
+
 app.use('/api/agora', agoraRoutes);
 
-app.get('/', (req, res) => {
+app.get('/', basicAuth, (req, res) => {
   const indexPath = path.join(__dirname, '../frontend/index.html');
   let html = require('fs').readFileSync(indexPath, 'utf8');
   
