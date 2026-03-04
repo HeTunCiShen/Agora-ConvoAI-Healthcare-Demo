@@ -6,6 +6,7 @@ A web application template for building conversational AI experiences using Agor
 
 - **Real-Time Voice Communication** - Powered by Agora RTC SDK
 - **Real-Time Messaging** - Agora RTM for text-based interactions
+- **Text Chat Interface** - Interactive chat panel for text conversations with AI
 - **Conversational AI Integration** - Support for multiple LLM providers (OpenAI, custom endpoints)
 - **Speech Recognition** - Automatic Speech Recognition (ASR) with ARES vendor
 - **Text-to-Speech** - Multiple TTS vendor support (Microsoft, ElevenLabs, MiniMax)
@@ -96,7 +97,9 @@ http://localhost:3000
 │   ├── app.js                  # Frontend application logic
 │   ├── styles.css              # Styling
 │   └── utils/
-│       └── config.js           # Frontend configuration
+│       ├── config.js           # Frontend configuration
+│       ├── chat.js             # Chat management component
+│       └── audioVisualizer.js  # Audio visualization
 ├── package.json
 ├── .env.example                # Environment variables template
 └── CLAUDE.md                   # AI assistant documentation
@@ -129,9 +132,22 @@ Stop an active conversation.
 
 ## Usage
 
-1. **Join a Channel**: Click the "Join" button to start a conversation with the AI agent
+### Voice Conversation
+1. **Join a Channel**: Click the "Start ConvoAI" button to begin a conversation with the AI agent
 2. **Speak**: The AI agent will listen and respond to your voice input
-3. **Leave**: Click "Leave" to end the conversation
+3. **Leave**: Click "Stop ConvoAI" to end the conversation
+
+### Text Chat
+1. **Open Chat**: Click the floating chat button (bottom-right) to open the chat panel
+2. **Send Messages**: Type messages and press Enter or click send to chat with the AI
+3. **View Messages**: See real-time conversation with the AI in the chat interface
+4. **Clear Chat**: Use the "Clear Chat" button to remove current session messages
+
+### Features
+- **Dual Input**: Use both voice and text input simultaneously
+- **Real-time Responses**: AI responses appear in real-time via RTM messaging
+- **Session-based**: Chat resets when starting a new conversation
+- **Mobile Responsive**: Works on both desktop and mobile devices
 
 ## Development
 
@@ -163,9 +179,17 @@ Change the `TTS_MINIMAX_VOICE_ID` to use different voice profiles:
 
 ### Frontend UI
 The frontend uses vanilla JavaScript and can be easily customized by modifying:
-- `frontend/index.html` - UI structure
-- `frontend/styles.css` - Visual styling
-- `frontend/app.js` - Application behavior
+- `frontend/index.html` - UI structure and chat elements
+- `frontend/styles.css` - Visual styling and chat panel design
+- `frontend/app.js` - Application behavior and RTM integration
+- `frontend/utils/chat.js` - Chat functionality and message handling
+
+### Chat Customization
+The chat interface can be customized by:
+- Modifying chat styles in `styles.css` (colors, positioning, animations)
+- Updating chat messages and placeholders in `utils/chat.js`
+- Changing the welcome message and system prompts
+- Adjusting chat panel size and responsive behavior
 
 ## Troubleshooting
 
@@ -182,6 +206,16 @@ The frontend uses vanilla JavaScript and can be easily customized by modifying:
 3. **No audio input/output**
    - Check browser microphone permissions
    - Ensure HTTPS is used (required for WebRTC)
+
+4. **Chat messages not appearing**
+   - Ensure RTM is properly initialized and connected
+   - Check console for RTM message handling errors
+   - Verify that the conversation is active before sending messages
+
+5. **Chat not working properly**
+   - Ensure the chat.js file is in the utils/ folder
+   - Check that RTM is properly initialized and connected
+   - Verify the conversation is active before attempting to chat
 
 ## License
 

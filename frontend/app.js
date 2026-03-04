@@ -85,7 +85,6 @@
 
       agoraConvoAIAgentID = response.agentId;
       agentUID = response.agentUid;
-
       
     }catch (e) {
       console.error('Failed to start ConvoAI agent', e);
@@ -110,7 +109,6 @@
       await API.agora.stopConversation(agoraConvoAIAgentID);
       agoraConvoAIAgentID = null;
       agentUID = null;
-      agentState = 'idle';
       
     }catch (e) {
       console.error('Failed to stop ConvoAI agent', e);
