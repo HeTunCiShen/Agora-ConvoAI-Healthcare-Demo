@@ -17,6 +17,7 @@
   let agentState = 'idle';
   let chatManager = null;
   let currentCallType = null; // 'patient' | 'post-op'
+  let rawAiMessages = []; // stores full AI message texts for summary extraction
   const profileModal = new ProfileModal();
 
   // ===========================
@@ -191,8 +192,8 @@
         agentUID = null;
       }
 
-      // Save summary to backend (patient calls only)
-      if (summary && currentCallType === 'patient' && selectedProfile) {
+      // Save summary to backend (patient and post-op calls)
+      if (summary && (currentCallType === 'patient' || currentCallType === 'post-op') && selectedProfile) {
         try {
           await API.healthcare.createSummary({ patient_id: selectedProfile.id, ...summary });
         } catch (e) {
@@ -208,15 +209,11 @@
   }
 
   function extractSummary() {
-    if (!chatManager) return null;
-    const messages = chatManager.getCurrentSessionMessages();
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.sender === 'ai' && msg.content) {
-        const match = msg.content.match(/<summary>([\s\S]*?)<\/summary>/);
-        if (match) {
-          try { return JSON.parse(match[1].trim()); } catch (_) {}
-        }
+    for (let i = rawAiMessages.length - 1; i >= 0; i--) {
+      const text = rawAiMessages[i];
+      const match = text.match(/<summary>([\s\S]*?)<\/summary>/);
+      if (match) {
+        try { return JSON.parse(match[1].trim()); } catch (_) {}
       }
     }
     return null;
@@ -279,16 +276,15 @@
       const parsed = typeof event.message === 'string' ? JSON.parse(event.message) : null;
       if (!parsed) return;
 
-      // Hide summary XML from chat display but let ChatManager store the message for extraction
-      if (parsed.object === 'assistant.transcription' && parsed.text && parsed.text.includes('<summary>')) {
-        // Store in chatManager messages but display a cleaner version
-        const cleanText = parsed.text.replace(/<summary>[\s\S]*?<\/summary>/, '').trim();
-        if (cleanText) chatManager && chatManager.receiveRtmMessage({ ...parsed, text: cleanText });
-        // Still pass the full message to chatManager's internal storage so extractSummary() finds it
-        if (chatManager) {
-          chatManager.currentSessionMessages.push({ id: Date.now(), content: parsed.text, sender: 'ai', timestamp: new Date() });
+      // Track raw AI transcription messages for summary extraction
+      if (parsed.object === 'assistant.transcription' && parsed.text) {
+        rawAiMessages.push(parsed.text);
+        // Strip summary XML before displaying to user
+        if (parsed.text.includes('<summary>')) {
+          const cleanText = parsed.text.replace(/<summary>[\s\S]*?<\/summary>/, '').trim();
+          if (cleanText) chatManager && chatManager.receiveRtmMessage({ ...parsed, text: cleanText });
+          return;
         }
-        return;
       }
 
       chatManager && chatManager.receiveRtmMessage(parsed);
@@ -328,6 +324,7 @@
     updateAgentStateUI('offline');
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
     currentCallType = null;
+    rawAiMessages = [];
   }
 
   function setCallButtonLoading(callType, loading) {
