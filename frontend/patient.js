@@ -208,7 +208,7 @@
       onCallStopped();
     } catch (e) {
       console.error('Failed to stop call', e);
-      setEndCallLoading(false);
+      onCallStopped();
     }
   }
 

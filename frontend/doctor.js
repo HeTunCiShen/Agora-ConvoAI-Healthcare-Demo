@@ -255,7 +255,7 @@
       onCallStopped();
     } catch (e) {
       console.error('Failed to stop call', e);
-      btn.classList.remove('loading');
+      onCallStopped();
     }
   }
 
