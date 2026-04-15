@@ -133,23 +133,20 @@
       ${s.ai_recommendation ? `<div class="summary-recommendation">AI: ${escapeHtml(s.ai_recommendation)}</div>` : ''}
       ${s.suggested_action ? `<div class="summary-action">Suggested action: ${escapeHtml(s.suggested_action)}</div>` : ''}
       ${s.transcript_excerpt ? `<div class="summary-transcript">"${escapeHtml(s.transcript_excerpt)}"</div>` : ''}
-      ${hasCarePlan ? `<div id="plan-actions-${s.id}"><button class="btn-approve" onclick="approvePlan('${s.patient_id}')">Approve Care Plan</button></div>` : ''}
+      ${hasCarePlan ? `<div id="plan-actions-${s.id}"><button class="btn-approve" data-patient-id="${encodeURIComponent(s.patient_id)}" onclick="approvePlan('${encodeURIComponent(s.patient_id)}')">Approve Care Plan</button></div>` : ''}
     `;
     return card;
   }
 
   // Exposed globally so inline onclick works
-  window.approvePlan = async function (patientId) {
+  window.approvePlan = async function (encodedPatientId) {
+    const patientId = decodeURIComponent(encodedPatientId);
     try {
       const plan = await API.healthcare.getCarePlan(patientId);
       await API.healthcare.updateCarePlan(plan.id, { status: 'approved' });
-      // Update UI
-      document.querySelectorAll(`[id^="plan-actions-"]`).forEach(el => {
-        const card = el.closest('.summary-card');
-        if (card) {
-          const pid = card.querySelector('.btn-approve')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1];
-          if (pid === patientId) el.innerHTML = '<span class="approved-tag">✓ Care plan approved</span>';
-        }
+      document.querySelectorAll(`.btn-approve[data-patient-id="${encodeURIComponent(patientId)}"]`).forEach(btn => {
+        const container = btn.closest('[id^="plan-actions-"]');
+        if (container) container.innerHTML = '<span class="approved-tag">✓ Care plan approved</span>';
       });
     } catch (e) {
       console.error('Failed to approve care plan', e);
