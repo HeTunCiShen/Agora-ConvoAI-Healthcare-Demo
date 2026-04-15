@@ -15,7 +15,7 @@ const basicAuth = (req, res, next) => {
 
   if (!authHeader || !authHeader.startsWith('Basic ')) {
     // No credentials provided - request authentication
-    res.setHeader('WWW-Authenticate', 'Basic realm="AI Anime Girlfriend Demo"');
+    res.setHeader('WWW-Authenticate', 'Basic realm="Healthcare AI Demo"');
     return res.status(401).json({ error: 'Authentication required' });
   }
 
@@ -31,7 +31,7 @@ const basicAuth = (req, res, next) => {
   }
 
   // Invalid credentials
-  res.setHeader('WWW-Authenticate', 'Basic realm="AI Anime Girlfriend Demo"');
+  res.setHeader('WWW-Authenticate', 'Basic realm="Healthcare AI Demo"');
   return res.status(401).json({ error: 'Invalid credentials' });
 };
 

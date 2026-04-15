@@ -60,9 +60,12 @@ function serveHtml(filePath, res) {
     window.APP_AUTH_USERNAME = ${JSON.stringify(process.env.AUTH_USERNAME || '')};
     window.APP_AUTH_PASSWORD = ${JSON.stringify(process.env.AUTH_PASSWORD || '')};
   </script>`;
-  html = html.replace('</head>', `${authScript}</head>`);
+  const injected = html.replace('</head>', `${authScript}</head>`);
+  if (injected === html) {
+    console.error(`[serveHtml] WARNING: </head> not found in ${filePath}; credentials not injected`);
+  }
   res.setHeader('Content-Type', 'text/html');
-  res.send(html);
+  res.send(injected);
 }
 
 app.get('/patient', (req, res) => {
