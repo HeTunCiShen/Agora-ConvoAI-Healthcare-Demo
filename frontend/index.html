@@ -3,104 +3,26 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agora AI Voice Call</title>
+  <title>HealthAI Demo</title>
   <link rel="stylesheet" href="styles.css" />
-  <script src="/lib/agora-rtc-sdk-ng/AgoraRTC_N-production.js"></script>
-  <script src="/lib/agora-rtm/agora-rtm.js"></script>
+  <link rel="stylesheet" href="shared/theme.css" />
 </head>
-<body>
-  <main class="card">
-    <div class="header">
-      <h1>Agora ConvoAI Demo</h1>
-      <p class="muted">Simple interface to start and stop ConvoAI conversations</p>
-    </div>
-
-    <section id="agent-state" class="agent-state">
-      <div class="state-indicator">
-        <span class="state-dot"></span>
-        <span class="state-text">offline</span>
-      </div>
-    </section>
-
-    <section id="ai-visualizer" class="ai-visualizer">
-      <div class="visualizer-container">
-        <div class="wave-bars">
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-          <div class="wave-bar"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="controls">
-      <button id="join" class="btn primary">
-        <span class="btn-text">Start ConvoAI</span>
-        <span class="btn-loading" style="display: none;">Starting...</span>
-      </button>
-      <button id="leave" class="btn danger" disabled>
-        <span class="btn-text">Stop ConvoAI</span>
-        <span class="btn-loading" style="display: none;">Stopping...</span>
-      </button>
-    </section>
-
-    <footer class="foot">
-      <small>ConvoAI integration with Agora RTC/RTM</small>
-    </footer>
-  </main>
-
-  <!-- Chat UI -->
-  <div id="chatToggle" class="chat-toggle" style="display: none;">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M8 12h8M8 8h8M8 16h5M7 20l4-4h6a3 3 0 003-3V7a3 3 0 00-3-3H7a3 3 0 00-3 3v10a3 3 0 003 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-  </div>
-
-  <div id="chatPanel" class="chat-panel">
-    <div class="chat-header">
-      <h3>Chat with AI</h3>
-      <button id="closeChatBtn" class="close-btn">×</button>
-    </div>
-    
-    <div class="chat-messages" id="chatMessages">
-      <!-- Messages will be populated by JavaScript -->
-    </div>
-    
-    <div id="typingIndicator" class="typing-indicator" style="display: none;">
-      <div class="typing-dots">
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-      </div>
-      <span>thinking...</span>
-    </div>
-    
-    <div class="chat-input">
-      <input 
-        type="text" 
-        id="messageInput" 
-        placeholder="Start the conversation to begin chatting..." 
-        disabled
-      />
-      <button id="sendBtn" class="send-btn" disabled>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-    </div>
-    
-    <div class="chat-actions">
-      <button id="clearChatBtn" class="clear-btn">Clear Chat</button>
+<body style="min-height:100vh;display:flex;align-items:center;justify-content:center">
+  <div style="text-align:center;padding:40px">
+    <h1 style="color:#0d9488;font-size:36px;font-weight:700;margin-bottom:8px">HealthAI</h1>
+    <p style="color:#6b7280;font-size:16px;margin-bottom:40px">AI-powered healthcare assistant demo</p>
+    <div style="display:flex;gap:20px;justify-content:center">
+      <a href="/patient" style="display:block;background:white;border:2px solid #99f6e4;border-radius:16px;padding:32px 40px;text-decoration:none;box-shadow:0 4px 16px rgba(13,148,136,0.08);transition:all 0.2s" onmouseover="this.style.borderColor='#0d9488';this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='#99f6e4';this.style.transform='none'">
+        <div style="font-size:40px;margin-bottom:12px">👤</div>
+        <div style="font-weight:700;font-size:16px;color:#1f2937;margin-bottom:4px">Patient</div>
+        <div style="font-size:13px;color:#6b7280">Call AI doctor, check-in</div>
+      </a>
+      <a href="/doctor" style="display:block;background:white;border:2px solid #99f6e4;border-radius:16px;padding:32px 40px;text-decoration:none;box-shadow:0 4px 16px rgba(13,148,136,0.08);transition:all 0.2s" onmouseover="this.style.borderColor='#0d9488';this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='#99f6e4';this.style.transform='none'">
+        <div style="font-size:40px;margin-bottom:12px">🩺</div>
+        <div style="font-weight:700;font-size:16px;color:#1f2937;margin-bottom:4px">Doctor</div>
+        <div style="font-size:13px;color:#6b7280">View summaries, consult AI</div>
+      </a>
     </div>
   </div>
-
-  <script src="utils/config.js"></script>
-  <script src="utils/audioVisualizer.js"></script>
-  <script src="utils/chat.js"></script>
-  <script src="app.js"></script>
 </body>
 </html>
