@@ -47,7 +47,7 @@ const getChannelInfo = (req, res) => {
 
 const startConversation = async (req, res) => {
   try {
-    const { channel, agentName, remoteUid: userUid, voiceId } = req.body;
+    const { channel, agentName, remoteUid: userUid, voiceId, promptType, profileContext, greetingMessage } = req.body;
     
     if (!channel || !agentName || !userUid) {
       return res.status(400).json({ 
@@ -71,7 +71,7 @@ const startConversation = async (req, res) => {
     }
 
     // Use provided system prompt or fall back to env variable or default
-    const defaultSystemPrompt = process.env.LLM_SYSTEM_PROMPT || "You are a friendly AI companion";
+    const defaultSystemPrompt = buildSystemPrompt(promptType || 'patient', profileContext || '');
     const appId = process.env.AGORA_APP_ID;
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
     const agentToken = appCertificate ? buildUnifiedToken(appId, appCertificate, channel, agentUid).token : "";
@@ -98,7 +98,7 @@ const startConversation = async (req, res) => {
               content: defaultSystemPrompt
             }
           ],
-          greeting_message: "Hello there! I'm your AI assistant. How can I help you today?",
+          greeting_message: greetingMessage || "Hello! I'm your AI medical assistant. How can I help you today?",
           failure_message: "Sorry, I'm having some trouble right now. Let me try again!",
           params: {
             model: process.env.LLM_MODEL || "gpt-4o-mini"
@@ -236,6 +236,16 @@ const stopConversation = async (req, res) => {
   }
 };
 
+function buildSystemPrompt(promptType, profileContext) {
+  const templates = {
+    patient: process.env.PROMPT_PATIENT || process.env.LLM_SYSTEM_PROMPT || 'You are a helpful medical AI assistant.',
+    'post-op': process.env.PROMPT_POST_OP_CARE || 'You are an AI following up with a patient after their procedure.',
+    doctor: process.env.PROMPT_DOCTOR_ASSISTANT || 'You are an AI clinical assistant for a doctor.'
+  };
+  const template = templates[promptType] || templates.patient;
+  return profileContext ? `${profileContext}\n\n${template}` : template;
+}
+
 // Helper: build unified RTC + RTM token
 function buildUnifiedToken(appId, appCertificate, channel, uid, expirationTimeInSeconds = 3600) {
   const numericUid = parseInt(uid);
@@ -264,5 +274,6 @@ function buildUnifiedToken(appId, appCertificate, channel, uid, expirationTimeIn
 module.exports = {
   getChannelInfo,
   startConversation,
-  stopConversation
+  stopConversation,
+  buildSystemPrompt
 };
