@@ -55,11 +55,26 @@ const API = {
                 body: JSON.stringify(data)
             }),
         
-        stopConversation: (agentId) => 
+        stopConversation: (agentId) =>
             API.request(`/agora/stop/${agentId}`, {
                 method: 'DELETE'
             })
     },
+
+    healthcare: {
+      getProfile: (id) =>
+        API.request(`/healthcare/profiles/${id}`),
+      listProfiles: (role) =>
+        API.request(`/healthcare/profiles${role ? '?role=' + role : ''}`),
+      listSummaries: () =>
+        API.request('/healthcare/summaries'),
+      createSummary: (data) =>
+        API.request('/healthcare/summaries', { method: 'POST', body: JSON.stringify(data) }),
+      getCarePlan: (patientId) =>
+        API.request(`/healthcare/care-plans/${patientId}`),
+      updateCarePlan: (id, data) =>
+        API.request(`/healthcare/care-plans/${id}`, { method: 'PUT', body: JSON.stringify(data) })
+    }
 };
 
 const STORAGE = {
