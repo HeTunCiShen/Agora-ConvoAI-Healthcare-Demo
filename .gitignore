@@ -43,8 +43,6 @@ pids/
 *.pid.lock
 
 # Claude Code project memory
-CLAUDE.md
-claude.md
 CLAUDE_sessions/
 
 # SQLite database
