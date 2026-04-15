@@ -59,3 +59,80 @@ describe('GET /api/healthcare/profiles', () => {
     expect(res.body).toHaveLength(2);
   });
 });
+
+describe('POST /api/healthcare/summaries', () => {
+  const app = makeApp();
+
+  test('creates a summary and returns 201', async () => {
+    const res = await request(app).post('/api/healthcare/summaries').send({
+      patient_id: 'patient-1',
+      call_type: 'pre-session',
+      chief_complaint: 'Headache',
+      symptoms: ['headache', 'nausea'],
+      vitals_mentioned: { bp: '128/82' },
+      medications_discussed: [],
+      ai_recommendation: 'Monitor BP',
+      urgency: 'low',
+      transcript_excerpt: 'Patient reported headache for 3 days.',
+      suggested_action: 'Review at next appointment'
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.patient_id).toBe('patient-1');
+    expect(res.body.call_type).toBe('pre-session');
+    expect(Array.isArray(res.body.symptoms)).toBe(true);
+  });
+
+  test('returns 400 when patient_id missing', async () => {
+    const res = await request(app).post('/api/healthcare/summaries').send({ call_type: 'pre-session' });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when call_type missing', async () => {
+    const res = await request(app).post('/api/healthcare/summaries').send({ patient_id: 'patient-1' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/healthcare/summaries', () => {
+  const app = makeApp();
+
+  test('returns empty array when no summaries', async () => {
+    const res = await request(app).get('/api/healthcare/summaries');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+});
+
+describe('GET /api/healthcare/care-plans/:patientId', () => {
+  const app = makeApp();
+
+  test('returns care plan for patient-2', async () => {
+    const res = await request(app).get('/api/healthcare/care-plans/patient-2');
+    expect(res.status).toBe(200);
+    expect(res.body.patient_id).toBe('patient-2');
+    expect(Array.isArray(res.body.plan_text)).toBe(true);
+  });
+
+  test('returns 404 for patient with no care plan', async () => {
+    const res = await request(app).get('/api/healthcare/care-plans/patient-1');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('PUT /api/healthcare/care-plans/:id', () => {
+  const app = makeApp();
+
+  test('approves care plan and updates status', async () => {
+    const res = await request(app)
+      .put('/api/healthcare/care-plans/plan-1')
+      .send({ status: 'approved', doctor_notes: 'Looks good.' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('approved');
+    expect(res.body.doctor_notes).toBe('Looks good.');
+  });
+
+  test('returns 404 for unknown plan id', async () => {
+    const res = await request(app).put('/api/healthcare/care-plans/bad-id').send({ status: 'approved' });
+    expect(res.status).toBe(404);
+  });
+});
