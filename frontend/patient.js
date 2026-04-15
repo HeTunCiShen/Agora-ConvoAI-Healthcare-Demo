@@ -117,6 +117,8 @@
   // ===========================
   async function startCall(callType) {
     currentCallType = callType;
+    document.getElementById('call-btn').setAttribute('disabled', 'true');
+    document.getElementById('postop-btn').setAttribute('disabled', 'true');
     setCallButtonLoading(callType, true);
 
     try {
@@ -162,6 +164,8 @@
     } catch (e) {
       console.error('Failed to start call', e);
       setCallButtonLoading(callType, false);
+      document.getElementById('call-btn').removeAttribute('disabled');
+      document.getElementById('postop-btn').removeAttribute('disabled');
     }
   }
 
@@ -268,6 +272,7 @@
 
   async function rtmLeaveChannel() {
     try { await rtmClient.unsubscribe(agoraChannel); } catch (_) {}
+    try { await rtmClient.logout(); } catch (_) {}
   }
 
   function handleRTMMessage(event) {

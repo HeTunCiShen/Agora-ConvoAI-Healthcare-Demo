@@ -308,6 +308,7 @@
 
   async function rtmLeaveChannel() {
     try { await rtmClient.unsubscribe(agoraChannel); } catch (_) {}
+    try { await rtmClient.logout(); } catch (_) {}
   }
 
   function handleRTMMessage(event) {
