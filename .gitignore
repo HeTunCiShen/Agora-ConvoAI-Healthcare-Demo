@@ -46,3 +46,6 @@ pids/
 CLAUDE.md
 claude.md
 CLAUDE_sessions/
+
+# SQLite database
+backend/db/healthcare.db

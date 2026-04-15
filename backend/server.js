@@ -2,7 +2,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const agoraRoutes = require('./routes/agora_routes');
+const { router: healthcareRouter } = require('./routes/healthcare_routes');
+const { addClient } = require('./sse');
 const basicAuth = require('./middleware/auth');
 
 const app = express();
@@ -11,7 +14,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// IP Whitelist middleware (optional additional security)
+// IP Whitelist middleware (optional)
 const allowedIPs = process.env.ALLOWED_IPS ? process.env.ALLOWED_IPS.split(',') : [];
 if (allowedIPs.length > 0) {
   app.use((req, res, next) => {
@@ -23,56 +26,64 @@ if (allowedIPs.length > 0) {
   });
 }
 
-// Health check endpoint (no auth required for monitoring)
+// Health check (no auth)
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// SSE endpoint — must be BEFORE basicAuth so EventSource can connect without auth headers
+app.get('/events', (req, res) => addClient(res));
 
+// Static files
 app.use(express.static(path.join(__dirname, '../frontend'), {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css');
-    } else if (path.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    }
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css');
+    else if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
   }
 }));
 app.use('/src', express.static(path.join(__dirname, '../src')));
 app.use('/lib', express.static(path.join(__dirname, '../node_modules'), {
-  setHeaders: (res, path) => {
-    if (path.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    }
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
   }
 }));
 
-// Apply Basic Authentication to API routes only
+// Auth on all /api routes
 app.use('/api', basicAuth);
-
 app.use('/api/agora', agoraRoutes);
+app.use('/api/healthcare', healthcareRouter);
+
+// Helper: serve an HTML file with injected auth credentials
+function serveHtml(filePath, res) {
+  let html = fs.readFileSync(filePath, 'utf8');
+  const authScript = `<script>
+    window.APP_AUTH_USERNAME = ${JSON.stringify(process.env.AUTH_USERNAME || '')};
+    window.APP_AUTH_PASSWORD = ${JSON.stringify(process.env.AUTH_PASSWORD || '')};
+  </script>`;
+  html = html.replace('</head>', `${authScript}</head>`);
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+}
+
+app.get('/patient', (req, res) => {
+  serveHtml(path.join(__dirname, '../frontend/patient.html'), res);
+});
+
+app.get('/doctor', (req, res) => {
+  serveHtml(path.join(__dirname, '../frontend/doctor.html'), res);
+});
 
 app.get('/', basicAuth, (req, res) => {
-  const indexPath = path.join(__dirname, '../frontend/index.html');
-  let html = require('fs').readFileSync(indexPath, 'utf8');
-  
-  // Inject authentication credentials into the HTML
-  const authScript = `
-    <script>
-      window.APP_AUTH_USERNAME = ${JSON.stringify(process.env.AUTH_USERNAME || '')};
-      window.APP_AUTH_PASSWORD = ${JSON.stringify(process.env.AUTH_PASSWORD || '')};
-    </script>
-  `;
-  
-  // Insert the auth script before the closing head tag
-  html = html.replace('</head>', `${authScript}</head>`);
-  
-  res.send(html);
+  serveHtml(path.join(__dirname, '../frontend/index.html'), res);
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Frontend available at http://localhost:${PORT}`);
-});
+// Only start listening when run directly (not during tests)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Patient page: http://localhost:${PORT}/patient`);
+    console.log(`Doctor page:  http://localhost:${PORT}/doctor`);
+  });
+}
 
 module.exports = app;
