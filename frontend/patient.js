@@ -15,6 +15,7 @@
   let agentUID = null;
   let agoraConvoAIAgentID = null;
   let agentState = 'idle';
+  let avatarUID = null;
   let chatManager = null;
   let currentCallType = null; // 'patient' | 'post-op'
   const profileModal = new ProfileModal();
@@ -160,6 +161,7 @@
 
       agoraConvoAIAgentID = response.agentId;
       agentUID = response.agentUid;
+      avatarUID = response.avatarUid || null;
     } catch (e) {
       console.error('Failed to start call', e);
       setCallButtonLoading(callType, false);
@@ -251,6 +253,16 @@
           }, 1000);
         }
       });
+    } else if (mediaType === 'video' && avatarUID && user.uid == avatarUID) {
+      rtcClient.subscribe(user, mediaType).then(() => {
+        const container = document.getElementById('avatar-container');
+        if (container) {
+          user.videoTrack.play(container);
+          container.classList.remove('hidden');
+          const vc = document.querySelector('.visualizer-container');
+          if (vc) vc.classList.add('hidden');
+        }
+      });
     }
   }
 
@@ -259,6 +271,12 @@
     if (user.uid == agentUID) {
       if (window.audioVisualizer) window.audioVisualizer.stopFrequencyAnalysis();
       updateAgentStateUI('offline');
+    }
+    if (avatarUID && user.uid == avatarUID) {
+      const container = document.getElementById('avatar-container');
+      if (container) container.classList.add('hidden');
+      const vc = document.querySelector('.visualizer-container');
+      if (vc) vc.classList.remove('hidden');
     }
   }
 
@@ -316,6 +334,11 @@
     document.getElementById('postop-btn').removeAttribute('disabled');
     document.getElementById('end-call-btn').classList.add('hidden');
     updateAgentStateUI('offline');
+    const avatarContainer = document.getElementById('avatar-container');
+    if (avatarContainer) avatarContainer.classList.add('hidden');
+    const vc = document.querySelector('.visualizer-container');
+    if (vc) vc.classList.remove('hidden');
+    avatarUID = null;
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
     currentCallType = null;
   }

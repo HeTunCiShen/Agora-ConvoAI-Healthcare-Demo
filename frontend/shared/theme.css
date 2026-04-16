@@ -340,3 +340,23 @@ body {
 .approved-tag { color: #059669; font-size: 12px; font-weight: 600; }
 
 .hidden { display: none !important; }
+
+/* Avatar video container — shown when Akool avatar is publishing video */
+.avatar-container {
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 9 / 16;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #1e293b;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* AgoraRTC injects a <video> element; make it fill the container */
+.avatar-container video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover;
+}

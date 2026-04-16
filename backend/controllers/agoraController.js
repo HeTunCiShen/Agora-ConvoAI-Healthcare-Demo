@@ -56,6 +56,8 @@ const startConversation = async (req, res) => {
     }
 
     const agentUid = Math.floor(Math.random() * 100000) + 1000;
+    // Avatar gets its own UID in a separate range to avoid collisions
+    const avatarUid = Math.floor(Math.random() * 100000) + 800000;
 
     // Check if credentials are configured
     if (!process.env.AGORA_API_KEY || !process.env.AGORA_API_SECRET || !process.env.AGORA_APP_ID) {
@@ -64,6 +66,7 @@ const startConversation = async (req, res) => {
         success: true,
         agentId: `DEMO_AGENT_${Date.now()}`,
         agentUid: agentUid,
+        avatarUid: 0,
         channel: channel,
         demo: true,
         message: 'Demo mode - configure API credentials for full functionality'
@@ -75,6 +78,7 @@ const startConversation = async (req, res) => {
     const appId = process.env.AGORA_APP_ID;
     const appCertificate = process.env.AGORA_APP_CERTIFICATE;
     const agentToken = appCertificate ? buildUnifiedToken(appId, appCertificate, channel, agentUid).token : "";
+    const avatarToken = appCertificate ? buildUnifiedToken(appId, appCertificate, channel, avatarUid).token : "";
 
     const requestBody = {
       name: agentName,
@@ -106,9 +110,9 @@ const startConversation = async (req, res) => {
           input_modalities: ["text"],
           output_modalities: ["text"]
         },
-        tts: { 
-          vendor: "minimax", 
-          params: { 
+        tts: {
+          vendor: "minimax",
+          params: {
             url: "wss://api-uw.minimax.io/ws/v1/t2a_v2",
             key: process.env.TTS_MINIMAX_API_KEY,
             group_id: process.env.TTS_MINIMAX_GROUP_ID,
@@ -117,10 +121,22 @@ const startConversation = async (req, res) => {
               voice_id: voiceId || process.env.TTS_MINIMAX_VOICE_ID
             },
             audio_setting: {
-              sample_rate: 16000,
+              sample_rate: 16000,  // Akool avatar requires exactly 16000 Hz
             }
           }
         },
+        ...(process.env.AKOOL_API_KEY && process.env.AKOOL_AVATAR_ID ? {
+          avatar: {
+            vendor: "akool",
+            enable: true,
+            params: {
+              api_key: process.env.AKOOL_API_KEY,
+              agora_uid: avatarUid.toString(),
+              agora_token: avatarToken,
+              avatar_id: process.env.AKOOL_AVATAR_ID
+            }
+          }
+        } : {}),
         turn_detection: {
           mode: "default",
           config: {
@@ -177,7 +193,8 @@ const startConversation = async (req, res) => {
     res.json({
       success: true,
       agentId: response.data.agent_id,
-      agentUid: agentUid || 2000000 + Math.floor(Math.random() * 1000),
+      agentUid: agentUid,
+      avatarUid: avatarUid,
       channel: channel
     });
 

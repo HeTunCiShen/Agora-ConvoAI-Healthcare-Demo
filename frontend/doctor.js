@@ -15,6 +15,7 @@
   let agoraUserUID = Math.floor(Math.random() * 100000) + 1000;
   let agentUID = null;
   let agoraConvoAIAgentID = null;
+  let avatarUID = null;
   let chatManager = null;
   const profileModal = new ProfileModal();
 
@@ -249,6 +250,7 @@
 
       agoraConvoAIAgentID = response.agentId;
       agentUID = response.agentUid;
+      avatarUID = response.avatarUid || null;
     } catch (e) {
       console.error('Failed to start call', e);
       btn.classList.remove('loading');
@@ -327,6 +329,16 @@
           }, 1000);
         }
       });
+    } else if (mediaType === 'video' && avatarUID && user.uid == avatarUID) {
+      rtcClient.subscribe(user, mediaType).then(() => {
+        const container = document.getElementById('avatar-container');
+        if (container) {
+          user.videoTrack.play(container);
+          container.classList.remove('hidden');
+          const vc = document.querySelector('.visualizer-container');
+          if (vc) vc.classList.add('hidden');
+        }
+      });
     }
   }
 
@@ -335,6 +347,12 @@
     if (user.uid == agentUID) {
       if (window.audioVisualizer) window.audioVisualizer.stopFrequencyAnalysis();
       updateAgentStateUI('offline');
+    }
+    if (avatarUID && user.uid == avatarUID) {
+      const container = document.getElementById('avatar-container');
+      if (container) container.classList.add('hidden');
+      const vc = document.querySelector('.visualizer-container');
+      if (vc) vc.classList.remove('hidden');
     }
   }
 
@@ -389,6 +407,11 @@
     document.getElementById('call-btn').removeAttribute('disabled');
     document.getElementById('end-call-btn').classList.add('hidden');
     updateAgentStateUI('offline');
+    const avatarContainer = document.getElementById('avatar-container');
+    if (avatarContainer) avatarContainer.classList.add('hidden');
+    const vc = document.querySelector('.visualizer-container');
+    if (vc) vc.classList.remove('hidden');
+    avatarUID = null;
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
   }
 
