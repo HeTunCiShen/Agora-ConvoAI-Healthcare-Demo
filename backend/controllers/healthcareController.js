@@ -140,7 +140,8 @@ function makeHealthcareController(db, sse) {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${process.env.LLM_API_KEY}`
-          }
+          },
+          timeout: 15000
         }
       );
 

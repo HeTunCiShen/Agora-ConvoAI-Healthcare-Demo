@@ -246,31 +246,34 @@
   async function stopCall() {
     const btn = document.getElementById('end-call-btn');
     btn.classList.add('loading');
-    try {
-      // Collect transcript before leaving channels
-      const transcript = (chatManager ? chatManager.getCurrentSessionMessages() : [])
-        .map(m => ({ role: m.sender === 'ai' ? 'assistant' : 'user', content: m.content }));
 
+    // Capture before onCallStopped() resets session state
+    const transcript = (chatManager ? chatManager.getCurrentSessionMessages() : [])
+      .map(m => ({ role: m.sender === 'ai' ? 'assistant' : 'user', content: m.content }));
+    const profile = selectedProfile;
+
+    try {
       if (rtcJoined) { await rtcLeaveChannel(); await rtmLeaveChannel(); }
       if (agoraConvoAIAgentID) {
         await API.agora.stopConversation(agoraConvoAIAgentID);
         agoraConvoAIAgentID = null; agentUID = null;
       }
-
-      // Generate summary via independent LLM call, then save
-      if (transcript.length > 0 && selectedProfile) {
-        try {
-          const summary = await API.healthcare.summarize({ transcript, call_type: 'doctor-query' });
-          await API.healthcare.createSummary({ patient_id: selectedProfile.id, ...summary });
-        } catch (e) {
-          console.error('Failed to generate or save doctor session summary', e);
-        }
-      }
-
-      onCallStopped();
     } catch (e) {
-      console.error('Failed to stop call', e);
-      onCallStopped();
+      console.error('Failed to stop call infrastructure', e);
+    }
+
+    // Reset UI immediately — never block on the LLM summarize call
+    onCallStopped();
+
+    // Summarize and save in background; errors are logged but don't affect UI
+    if (transcript.length > 0 && profile) {
+      console.log(`[stopCall] generating doctor summary, ${transcript.length} messages`);
+      API.healthcare.summarize({ transcript, call_type: 'doctor-query' })
+        .then(summary => API.healthcare.createSummary({ patient_id: profile.id, ...summary }))
+        .then(() => console.log('[stopCall] doctor summary saved'))
+        .catch(e => console.error('[stopCall] failed to generate or save doctor summary:', e));
+    } else {
+      console.log(`[stopCall] skipping summary — transcript empty or no profile`);
     }
   }
 
