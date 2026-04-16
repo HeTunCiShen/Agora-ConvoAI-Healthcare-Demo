@@ -102,6 +102,8 @@ function makeHealthcareController(db, sse) {
       return res.status(400).json({ error: 'call_type is required' });
     }
 
+    console.log(`[summarize] call_type=${call_type}, transcript_messages=${transcript.length}`);
+
     const isDoctor = call_type === 'doctor-query';
     const speakerLabel = isDoctor ? 'Doctor' : 'Patient';
 
@@ -116,8 +118,11 @@ function makeHealthcareController(db, sse) {
       .join('\n');
 
     if (!process.env.LLM_URL || !process.env.LLM_API_KEY) {
+      console.warn('[summarize] LLM_URL or LLM_API_KEY not configured');
       return res.status(503).json({ error: 'LLM not configured' });
     }
+
+    console.log(`[summarize] calling LLM at ${process.env.LLM_URL}`);
 
     try {
       const response = await axios.post(
@@ -140,13 +145,16 @@ function makeHealthcareController(db, sse) {
       );
 
       const raw = response.data.choices[0].message.content.trim();
+      console.log(`[summarize] LLM raw response: ${raw}`);
+
       // Strip markdown code fences if model adds them
       const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
       const summary = JSON.parse(jsonStr);
       // Ensure call_type is correct regardless of what the LLM returns
+      console.log(`[summarize] parsed summary ok, urgency=${summary.urgency}`);
       res.json({ ...summary, call_type });
     } catch (e) {
-      console.error('generateSummary LLM error:', e.response?.data || e.message);
+      console.error('[summarize] LLM error:', e.response?.data || e.message);
       res.status(500).json({ error: 'Failed to generate summary', details: e.message });
     }
   }
