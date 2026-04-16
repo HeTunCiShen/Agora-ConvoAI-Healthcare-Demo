@@ -312,6 +312,8 @@
     setEndCallLoading(false);
     document.getElementById('call-btn').classList.remove('hidden');
     document.getElementById('postop-btn').classList.remove('hidden');
+    document.getElementById('call-btn').removeAttribute('disabled');
+    document.getElementById('postop-btn').removeAttribute('disabled');
     document.getElementById('end-call-btn').classList.add('hidden');
     updateAgentStateUI('offline');
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }

@@ -29,7 +29,12 @@ function makeHealthcareController(db, sse) {
   }
 
   function listSummaries(req, res) {
-    const rows = db.prepare('SELECT * FROM call_summaries ORDER BY created_at DESC').all();
+    const rows = db.prepare(`
+      SELECT cs.*, p.name AS patient_name
+      FROM call_summaries cs
+      LEFT JOIN profiles p ON cs.patient_id = p.id
+      ORDER BY cs.created_at DESC
+    `).all();
     rows.forEach(r => parseJsonFields(r, ['symptoms', 'vitals_mentioned', 'medications_discussed']));
     res.json(rows);
   }

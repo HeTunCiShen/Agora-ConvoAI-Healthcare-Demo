@@ -210,14 +210,26 @@
   async function startCall() {
     const btn = document.getElementById('call-btn');
     btn.classList.add('loading');
+    btn.setAttribute('disabled', 'true');
     try {
       agoraChannelInfo = await API.agora.getChannelInfo(agoraChannel, agoraUserUID);
 
-      const profileContext = [
+      let profileContext = [
         `Doctor name: ${selectedProfile.name}`,
         `Specialty: ${selectedProfile.specialty}`,
         `Hospital: ${selectedProfile.hospital}`
       ].join('\n');
+
+      // Include recent patient summaries so the AI knows what cases came in today
+      try {
+        const summaries = await API.healthcare.listSummaries();
+        const recent = summaries.slice(0, 5);
+        if (recent.length > 0) {
+          profileContext += '\n\nRecent patient call summaries:\n' + recent.map(s =>
+            `- ${s.patient_name || s.patient_id} (${s.call_type}): ${s.chief_complaint || 'n/a'}. Urgency: ${s.urgency || 'low'}. AI recommendation: ${s.ai_recommendation || 'n/a'}`
+          ).join('\n');
+        }
+      } catch (_) { /* no summaries — proceed anyway */ }
 
       rtmClient = new AgoraRTM.RTM(agoraChannelInfo.appId, agoraUserUID.toString());
       rtmClient.addEventListener('message', handleRTMMessage);
@@ -240,6 +252,7 @@
     } catch (e) {
       console.error('Failed to start call', e);
       btn.classList.remove('loading');
+      btn.removeAttribute('disabled');
     }
   }
 
@@ -373,6 +386,7 @@
   function onCallStopped() {
     document.getElementById('end-call-btn').classList.remove('loading');
     document.getElementById('call-btn').classList.remove('hidden');
+    document.getElementById('call-btn').removeAttribute('disabled');
     document.getElementById('end-call-btn').classList.add('hidden');
     updateAgentStateUI('offline');
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
