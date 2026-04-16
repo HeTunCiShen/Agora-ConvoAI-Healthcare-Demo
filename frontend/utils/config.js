@@ -35,7 +35,10 @@ const API = {
             const data = await response.json();
             
             if (!response.ok) {
-                throw new Error(data.error || `HTTP ${response.status}`);
+                const msg = data.details
+                    ? `${data.error}: ${data.details}`
+                    : (data.error || `HTTP ${response.status}`);
+                throw new Error(msg);
             }
             
             return data;

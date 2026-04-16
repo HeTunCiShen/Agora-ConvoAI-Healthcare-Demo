@@ -183,7 +183,9 @@
     setEndCallLoading(true);
 
     // Capture before onCallStopped() resets currentCallType / session
+    // Cap at last 20 messages — enough context for a summary, keeps LLM request size manageable
     const transcript = (chatManager ? chatManager.getCurrentSessionMessages() : [])
+      .slice(-20)
       .map(m => ({ role: m.sender === 'ai' ? 'assistant' : 'user', content: m.content }));
     const callType = currentCallType === 'post-op' ? 'post-op' : 'patient';
     const profile = selectedProfile;

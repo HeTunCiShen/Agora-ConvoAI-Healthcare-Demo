@@ -248,7 +248,9 @@
     btn.classList.add('loading');
 
     // Capture before onCallStopped() resets session state
+    // Cap at last 20 messages — enough context for a summary, keeps LLM request size manageable
     const transcript = (chatManager ? chatManager.getCurrentSessionMessages() : [])
+      .slice(-20)
       .map(m => ({ role: m.sender === 'ai' ? 'assistant' : 'user', content: m.content }));
     const profile = selectedProfile;
 
