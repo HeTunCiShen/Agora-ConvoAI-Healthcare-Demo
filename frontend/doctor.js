@@ -340,7 +340,7 @@
     document.getElementById('call-btn').classList.add('hidden');
     document.getElementById('end-call-btn').classList.remove('hidden');
     updateAgentStateUI('speaking');
-    if (chatManager) { chatManager.enableChat(); chatManager.startNewSession(); }
+    if (chatManager) { chatManager.enableChat(); chatManager.startNewSession(); chatManager.openChat(); }
   }
 
   function onCallStopped() {
