@@ -190,6 +190,7 @@ body {
 .badge-condition-check { background: #fce7f3; color: #9d174d; }
 .badge-post-session { background: #e0faf5; color: #065f46; }
 .badge-post-op { background: #fef3c7; color: #92400e; }
+.badge-doctor-query { background: #ede9fe; color: #5b21b6; }
 
 /* Summary feed card */
 .summary-card {

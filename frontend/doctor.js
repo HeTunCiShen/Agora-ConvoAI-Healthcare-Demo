@@ -16,6 +16,7 @@
   let agentUID = null;
   let agoraConvoAIAgentID = null;
   let chatManager = null;
+  let rawAiMessages = [];
   const profileModal = new ProfileModal();
 
   // ===========================
@@ -247,11 +248,23 @@
     const btn = document.getElementById('end-call-btn');
     btn.classList.add('loading');
     try {
+      const summary = extractSummary();
+
       if (rtcJoined) { await rtcLeaveChannel(); await rtmLeaveChannel(); }
       if (agoraConvoAIAgentID) {
         await API.agora.stopConversation(agoraConvoAIAgentID);
         agoraConvoAIAgentID = null; agentUID = null;
       }
+
+      // Save doctor query summary to DB so it appears in the feed
+      if (summary && selectedProfile) {
+        try {
+          await API.healthcare.createSummary({ patient_id: selectedProfile.id, ...summary });
+        } catch (e) {
+          console.error('Failed to save doctor session summary', e);
+        }
+      }
+
       onCallStopped();
     } catch (e) {
       console.error('Failed to stop call', e);
@@ -315,8 +328,32 @@
     if (event.channelType !== 'MESSAGE' || event.channelName !== agoraChannel) return;
     try {
       const parsed = typeof event.message === 'string' ? JSON.parse(event.message) : null;
-      if (parsed) chatManager && chatManager.receiveRtmMessage(parsed);
+      if (!parsed) return;
+
+      // Track raw AI messages for summary extraction
+      if (parsed.object === 'assistant.transcription' && parsed.text) {
+        rawAiMessages.push(parsed.text);
+        // Strip summary XML before displaying in chat
+        if (parsed.text.includes('<summary>')) {
+          const cleanText = parsed.text.replace(/<summary>[\s\S]*?<\/summary>/, '').trim();
+          if (cleanText) chatManager && chatManager.receiveRtmMessage({ ...parsed, text: cleanText });
+          return;
+        }
+      }
+
+      chatManager && chatManager.receiveRtmMessage(parsed);
     } catch (_) {}
+  }
+
+  function extractSummary() {
+    for (let i = rawAiMessages.length - 1; i >= 0; i--) {
+      const text = rawAiMessages[i];
+      const match = text.match(/<summary>([\s\S]*?)<\/summary>/);
+      if (match) {
+        try { return JSON.parse(match[1].trim()); } catch (_) {}
+      }
+    }
+    return null;
   }
 
   function handleRTMPresenceEvent(event) {
@@ -349,6 +386,7 @@
     document.getElementById('end-call-btn').classList.add('hidden');
     updateAgentStateUI('offline');
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
+    rawAiMessages = [];
   }
 
   function updateAgentStateUI(state) {
