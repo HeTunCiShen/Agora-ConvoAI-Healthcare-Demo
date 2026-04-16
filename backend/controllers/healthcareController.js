@@ -117,18 +117,24 @@ function makeHealthcareController(db, sse) {
       .map(m => `${m.role === 'assistant' ? 'AI' : speakerLabel}: ${m.content}`)
       .join('\n');
 
-    if (!process.env.LLM_URL || !process.env.LLM_API_KEY) {
-      console.warn('[summarize] LLM_URL or LLM_API_KEY not configured');
+    // SUMMARIZE_LLM_* vars override LLM_* — allows a different model/provider
+    // just for post-call summarization (e.g. Kimi in China vs OpenAI for conversation)
+    const llmUrl = process.env.SUMMARIZE_LLM_URL || process.env.LLM_URL;
+    const llmKey = process.env.SUMMARIZE_LLM_API_KEY || process.env.LLM_API_KEY;
+    const llmModel = process.env.SUMMARIZE_LLM_MODEL || process.env.LLM_MODEL || 'gpt-4o-mini';
+
+    if (!llmUrl || !llmKey) {
+      console.warn('[summarize] no LLM URL/key configured (set SUMMARIZE_LLM_URL or LLM_URL)');
       return res.status(503).json({ error: 'LLM not configured' });
     }
 
-    console.log(`[summarize] calling LLM at ${process.env.LLM_URL}`);
+    console.log(`[summarize] calling LLM at ${llmUrl} model=${llmModel}`);
 
     try {
       const response = await axios.post(
-        process.env.LLM_URL,
+        llmUrl,
         {
-          model: process.env.LLM_MODEL || 'gpt-4o-mini',
+          model: llmModel,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: `Transcript:\n${conversationText}` }
@@ -139,7 +145,7 @@ function makeHealthcareController(db, sse) {
         {
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${process.env.LLM_API_KEY}`
+            'Authorization': `Bearer ${llmKey}`
           },
           timeout: 30000
         }
