@@ -244,30 +244,37 @@
   }
 
   async function stopCall() {
-    const btn = document.getElementById('end-call-btn');
-    btn.classList.add('loading');
-
-    // Capture before onCallStopped() resets session state
-    // Cap at last 20 messages — enough context for a summary, keeps LLM request size manageable
+    // Capture session state BEFORE resetting UI (onCallStopped clears session)
     const transcript = (chatManager ? chatManager.getCurrentSessionMessages() : [])
       .slice(-20)
       .map(m => ({ role: m.sender === 'ai' ? 'assistant' : 'user', content: m.content }));
     const profile = selectedProfile;
+    const agentId = agoraConvoAIAgentID;
 
-    try {
-      if (rtcJoined) { await rtcLeaveChannel(); await rtmLeaveChannel(); }
-      if (agoraConvoAIAgentID) {
-        await API.agora.stopConversation(agoraConvoAIAgentID);
-        agoraConvoAIAgentID = null; agentUID = null;
-      }
-    } catch (e) {
-      console.error('Failed to stop call infrastructure', e);
-    }
-
-    // Reset UI immediately — never block on the LLM summarize call
+    // Reset UI instantly — don't make user wait for network teardown
     onCallStopped();
 
-    // Summarize and save in background; errors are logged but don't affect UI
+    // RTC/RTM/agent cleanup in background with timing logs
+    console.log('[stopCall] starting cleanup...');
+    const t0 = Date.now();
+
+    try {
+      if (rtcJoined) {
+        await rtcLeaveChannel();
+        console.log(`[stopCall] rtcLeaveChannel done (${Date.now() - t0}ms)`);
+        await rtmLeaveChannel();
+        console.log(`[stopCall] rtmLeaveChannel done (${Date.now() - t0}ms)`);
+      }
+      if (agentId) {
+        agoraConvoAIAgentID = null; agentUID = null;
+        await API.agora.stopConversation(agentId);
+        console.log(`[stopCall] stopConversation done (${Date.now() - t0}ms)`);
+      }
+    } catch (e) {
+      console.error(`[stopCall] cleanup error at ${Date.now() - t0}ms:`, e);
+    }
+
+    // Summarize and save in background
     if (transcript.length > 0 && profile) {
       console.log(`[stopCall] generating doctor summary, ${transcript.length} messages`);
       API.healthcare.summarize({ transcript, call_type: 'doctor-query' })
@@ -275,7 +282,7 @@
         .then(() => console.log('[stopCall] doctor summary saved'))
         .catch(e => console.error('[stopCall] failed to generate or save doctor summary:', e));
     } else {
-      console.log(`[stopCall] skipping summary — transcript empty or no profile`);
+      console.log('[stopCall] skipping summary — transcript empty or no profile');
     }
   }
 
