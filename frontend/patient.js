@@ -17,7 +17,6 @@
   let agentState = 'idle';
   let chatManager = null;
   let currentCallType = null; // 'patient' | 'post-op'
-  let rawAiMessages = []; // stores full AI message texts for summary extraction
   const profileModal = new ProfileModal();
 
   // ===========================
@@ -183,8 +182,9 @@
   async function stopCall() {
     setEndCallLoading(true);
     try {
-      // Extract summary before stopping
-      const summary = extractSummary();
+      // Collect transcript before leaving channels
+      const transcript = (chatManager ? chatManager.getCurrentSessionMessages() : [])
+        .map(m => ({ role: m.sender === 'ai' ? 'assistant' : 'user', content: m.content }));
 
       if (rtcJoined) {
         await rtcLeaveChannel();
@@ -196,12 +196,14 @@
         agentUID = null;
       }
 
-      // Save summary to backend (patient and post-op calls)
-      if (summary && (currentCallType === 'patient' || currentCallType === 'post-op') && selectedProfile) {
+      // Generate summary via independent LLM call, then save
+      if (transcript.length > 0 && selectedProfile) {
         try {
+          const callType = currentCallType === 'post-op' ? 'post-op' : 'patient';
+          const summary = await API.healthcare.summarize({ transcript, call_type: callType });
           await API.healthcare.createSummary({ patient_id: selectedProfile.id, ...summary });
         } catch (e) {
-          console.error('Failed to save summary', e);
+          console.error('Failed to generate or save summary', e);
         }
       }
 
@@ -210,17 +212,6 @@
       console.error('Failed to stop call', e);
       onCallStopped();
     }
-  }
-
-  function extractSummary() {
-    for (let i = rawAiMessages.length - 1; i >= 0; i--) {
-      const text = rawAiMessages[i];
-      const match = text.match(/<summary>([\s\S]*?)<\/summary>/);
-      if (match) {
-        try { return JSON.parse(match[1].trim()); } catch (_) {}
-      }
-    }
-    return null;
   }
 
   // ===========================
@@ -279,20 +270,7 @@
     if (event.channelType !== 'MESSAGE' || event.channelName !== agoraChannel) return;
     try {
       const parsed = typeof event.message === 'string' ? JSON.parse(event.message) : null;
-      if (!parsed) return;
-
-      // Track raw AI transcription messages for summary extraction
-      if (parsed.object === 'assistant.transcription' && parsed.text) {
-        rawAiMessages.push(parsed.text);
-        // Strip summary XML before displaying to user
-        if (parsed.text.includes('<summary>')) {
-          const cleanText = parsed.text.replace(/<summary>[\s\S]*?<\/summary>/, '').trim();
-          if (cleanText) chatManager && chatManager.receiveRtmMessage({ ...parsed, text: cleanText });
-          return;
-        }
-      }
-
-      chatManager && chatManager.receiveRtmMessage(parsed);
+      if (parsed) chatManager && chatManager.receiveRtmMessage(parsed);
     } catch (_) {}
   }
 
@@ -329,7 +307,6 @@
     updateAgentStateUI('offline');
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
     currentCallType = null;
-    rawAiMessages = [];
   }
 
   function setCallButtonLoading(callType, loading) {

@@ -1,5 +1,6 @@
 // backend/controllers/healthcareController.js
 const { randomUUID } = require('crypto');
+const axios = require('axios');
 
 function parseJsonFields(row, fields) {
   fields.forEach(f => {
@@ -91,11 +92,70 @@ function makeHealthcareController(db, sse) {
     res.json(updated);
   }
 
+  async function generateSummary(req, res) {
+    const { transcript, call_type } = req.body;
+
+    if (!transcript || !Array.isArray(transcript) || transcript.length === 0) {
+      return res.status(400).json({ error: 'transcript array is required' });
+    }
+    if (!call_type) {
+      return res.status(400).json({ error: 'call_type is required' });
+    }
+
+    const isDoctor = call_type === 'doctor-query';
+    const speakerLabel = isDoctor ? 'Doctor' : 'Patient';
+
+    const systemPrompt = isDoctor
+      ? `You are a clinical documentation assistant. Given a conversation transcript between a doctor and an AI clinical assistant, return ONLY a valid JSON object (no markdown, no explanation) with these exact fields:
+{"call_type":"doctor-query","chief_complaint":"clinical topic or question discussed","ai_recommendation":"key answer or recommendation given","transcript_excerpt":"most important 1-2 sentence exchange","suggested_action":"follow-up action if any, otherwise empty string","urgency":"low"}`
+      : `You are a clinical documentation assistant. Given a conversation transcript between a patient and an AI medical assistant, return ONLY a valid JSON object (no markdown, no explanation) with these exact fields:
+{"call_type":"pre-session|condition-check|post-session|post-op","chief_complaint":"main reason for the call","symptoms":[],"vitals_mentioned":{},"medications_discussed":[],"ai_recommendation":"what the AI recommended","urgency":"low|medium|high","transcript_excerpt":"most important 1-2 sentence exchange","suggested_action":"what the doctor should do"}`;
+
+    const conversationText = transcript
+      .map(m => `${m.role === 'assistant' ? 'AI' : speakerLabel}: ${m.content}`)
+      .join('\n');
+
+    if (!process.env.LLM_URL || !process.env.LLM_API_KEY) {
+      return res.status(503).json({ error: 'LLM not configured' });
+    }
+
+    try {
+      const response = await axios.post(
+        process.env.LLM_URL,
+        {
+          model: process.env.LLM_MODEL || 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `Transcript:\n${conversationText}` }
+          ],
+          max_tokens: 500,
+          temperature: 0.2
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.LLM_API_KEY}`
+          }
+        }
+      );
+
+      const raw = response.data.choices[0].message.content.trim();
+      // Strip markdown code fences if model adds them
+      const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+      const summary = JSON.parse(jsonStr);
+      // Ensure call_type is correct regardless of what the LLM returns
+      res.json({ ...summary, call_type });
+    } catch (e) {
+      console.error('generateSummary LLM error:', e.response?.data || e.message);
+      res.status(500).json({ error: 'Failed to generate summary', details: e.message });
+    }
+  }
+
   function sseStream(req, res) {
     sse.addClient(res);
   }
 
-  return { getProfile, listProfiles, listSummaries, createSummary, getCarePlan, updateCarePlan, sseStream };
+  return { getProfile, listProfiles, listSummaries, createSummary, generateSummary, getCarePlan, updateCarePlan, sseStream };
 }
 
 module.exports = { makeHealthcareController };

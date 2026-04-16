@@ -20,6 +20,7 @@ router.get('/profiles/:id', controller.getProfile);
 router.get('/profiles', controller.listProfiles);
 router.get('/summaries', controller.listSummaries);
 router.post('/summaries', controller.createSummary);
+router.post('/summarize', controller.generateSummary);
 router.get('/care-plans/:patientId', controller.getCarePlan);
 router.put('/care-plans/:id', controller.updateCarePlan);
 

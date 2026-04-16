@@ -240,7 +240,7 @@ function buildSystemPrompt(promptType, profileContext) {
   const templates = {
     patient: process.env.PROMPT_PATIENT || process.env.LLM_SYSTEM_PROMPT || 'You are a helpful medical AI assistant.',
     'post-op': process.env.PROMPT_POST_OP_CARE || 'You are an AI following up with a patient after their procedure.',
-    doctor: process.env.PROMPT_DOCTOR_ASSISTANT || 'You are an AI clinical assistant. Answer medical questions concisely and accurately — drug interactions, treatment protocols, dosage guidelines, differential diagnoses. Be direct and professional. Cite your reasoning.\n\nAt the end of the call, output a JSON summary enclosed in <summary></summary> tags:\n{"call_type":"doctor-query","chief_complaint":"clinical topic or question discussed","ai_recommendation":"key answer or recommendation given","transcript_excerpt":"most important exchange from the call","suggested_action":"follow-up action if any, or empty string","urgency":"low"}'
+    doctor: process.env.PROMPT_DOCTOR_ASSISTANT || 'You are an AI clinical assistant. Answer medical questions concisely and accurately — drug interactions, treatment protocols, dosage guidelines, differential diagnoses. Be direct and professional. Cite your reasoning.'
   };
   const template = templates[promptType] || templates.patient;
   return profileContext ? `${profileContext}\n\n${template}` : template;

@@ -70,6 +70,8 @@ const API = {
         API.request('/healthcare/summaries'),
       createSummary: (data) =>
         API.request('/healthcare/summaries', { method: 'POST', body: JSON.stringify(data) }),
+      summarize: (data) =>
+        API.request('/healthcare/summarize', { method: 'POST', body: JSON.stringify(data) }),
       getCarePlan: (patientId) =>
         API.request(`/healthcare/care-plans/${patientId}`),
       updateCarePlan: (id, data) =>
