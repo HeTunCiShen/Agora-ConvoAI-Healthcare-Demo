@@ -251,6 +251,8 @@
       agoraConvoAIAgentID = response.agentId;
       agentUID = response.agentUid;
       avatarUID = response.avatarUid || null;
+      console.log('[startCall] agent started — agentId=%s agentUid=%s avatarUid=%s waiting for user-published…',
+        agoraConvoAIAgentID, agentUID, avatarUID);
     } catch (e) {
       console.error('Failed to start call', e);
       btn.classList.remove('loading');
@@ -319,10 +321,14 @@
 
   function handleRTCUserPublished(user, mediaType) {
     rtcRemoteUsers[user.uid] = user;
+    console.log('[RTC] user-published uid=%s mediaType=%s (agentUID=%s avatarUID=%s)',
+      user.uid, mediaType, agentUID, avatarUID);
     if (mediaType === 'audio') {
       rtcClient.subscribe(user, mediaType).then(() => {
         user.audioTrack.play();
-        if (user.uid == agentUID) {
+        // When avatar is enabled, the avatar UID publishes the audio (not the agent UID)
+        const isCallAudio = user.uid == agentUID || (avatarUID && user.uid == avatarUID);
+        if (isCallAudio) {
           onCallStarted();
           setTimeout(() => {
             if (window.audioVisualizer) window.audioVisualizer.startFrequencyAnalysis(user.audioTrack);
@@ -344,7 +350,8 @@
 
   function handleRTCUserUnpublished(user) {
     delete rtcRemoteUsers[user.uid];
-    if (user.uid == agentUID) {
+    const isCallUser = user.uid == agentUID || (avatarUID && user.uid == avatarUID);
+    if (isCallUser) {
       if (window.audioVisualizer) window.audioVisualizer.stopFrequencyAnalysis();
       updateAgentStateUI('offline');
     }

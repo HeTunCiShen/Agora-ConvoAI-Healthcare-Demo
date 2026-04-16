@@ -178,7 +178,10 @@ const startConversation = async (req, res) => {
     };
 
     const auth = Buffer.from(`${process.env.AGORA_API_KEY}:${process.env.AGORA_API_SECRET}`).toString('base64');
-    
+
+    console.log('[startConversation] sending join request — agentUid=%d avatarUid=%d avatar=%s',
+      agentUid, avatarUid, process.env.AKOOL_API_KEY ? 'akool' : 'none');
+
     const response = await axios.post(
       `https://api.agora.io/api/conversational-ai-agent/v2/projects/${process.env.AGORA_APP_ID}/join`,
       requestBody,
@@ -186,9 +189,12 @@ const startConversation = async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Basic ${auth}`
-        }
+        },
+        timeout: 15000
       }
     );
+
+    console.log('[startConversation] join response status=%d body=%j', response.status, response.data);
 
     res.json({
       success: true,
@@ -199,10 +205,11 @@ const startConversation = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Agora API error:', error.response?.data || error.message);
-    res.status(500).json({ 
+    const detail = error.response?.data || error.message;
+    console.error('[startConversation] Agora API error status=%s body=%j', error.response?.status, detail);
+    res.status(500).json({
       error: 'Failed to start conversation',
-      details: error.response?.data || error.message
+      details: detail
     });
   }
 };
