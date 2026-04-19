@@ -8,7 +8,9 @@ const sse = require('../sse');
 
 const dbPath = process.env.NODE_ENV === 'test'
   ? ':memory:'
-  : path.join(__dirname, '../db/healthcare.db');
+  : process.env.VERCEL
+    ? '/tmp/healthcare.db'
+    : path.join(__dirname, '../db/healthcare.db');
 
 const db = createDb(dbPath);
 seed(db);
@@ -21,6 +23,10 @@ router.get('/profiles', controller.listProfiles);
 router.get('/summaries', controller.listSummaries);
 router.post('/summaries', controller.createSummary);
 router.post('/summarize', controller.generateSummary);
+router.get('/profile-summary/:patientId', controller.getProfileSummary);
+router.get('/appointments', controller.listAppointments);
+router.post('/appointments', controller.createAppointment);
+router.put('/appointments/:id', controller.updateAppointment);
 router.get('/care-plans/:patientId', controller.getCarePlan);
 router.put('/care-plans/:id', controller.updateCarePlan);
 

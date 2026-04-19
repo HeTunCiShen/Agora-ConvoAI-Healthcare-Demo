@@ -18,6 +18,11 @@
 body {
   background: var(--bg);
   color: var(--text);
+  /* Override base styles.css flex centering so pages can scroll naturally */
+  display: block;
+  height: auto;
+  padding: 0;
+  min-height: 100vh;
 }
 
 /* Override primary button accent */
@@ -240,7 +245,258 @@ body {
   padding-top: 8px;
 }
 
-/* Doctor page layout */
+/* ===========================
+   MASTER-DETAIL LAYOUT
+   (used by both patient & doctor pages)
+   =========================== */
+
+/* Top bar: profile + call controls */
+.top-bar {
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.top-bar .profile-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.top-bar .profile-section .avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--accent-light); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 12px; flex-shrink: 0;
+}
+.top-bar .profile-section .profile-name {
+  font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.top-bar .profile-section .profile-name:hover { text-decoration: underline; }
+.top-bar .profile-section .profile-meta {
+  font-size: 11px; color: var(--muted);
+}
+.top-bar .call-controls {
+  display: flex; gap: 8px; align-items: center;
+}
+
+/* Master-detail container */
+.master-detail {
+  display: flex;
+  height: calc(100vh - 110px);
+  overflow: hidden;
+}
+
+/* Left: card list */
+.master-panel {
+  width: 220px;
+  border-right: 1px solid #e5e7eb;
+  padding: 12px;
+  overflow-y: auto;
+  background: #f9fafb;
+  flex-shrink: 0;
+}
+.master-panel .panel-title {
+  font-size: 10px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin: 0 0 8px;
+}
+
+/* Card in master list */
+.master-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  position: relative;
+}
+.master-card:hover { border-color: var(--accent-border); }
+.master-card.selected { border: 2px solid var(--accent); }
+.master-card .card-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.master-card .card-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--accent-light); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 10px; flex-shrink: 0;
+}
+.master-card .card-name { font-weight: 600; font-size: 11px; }
+.master-card .card-sub { font-size: 10px; color: var(--muted); }
+.master-card .card-stats {
+  margin-top: 6px; font-size: 10px; color: var(--accent);
+}
+.master-card .notification-badge {
+  position: absolute; top: -4px; right: -4px;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: var(--danger); color: white;
+  font-size: 9px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* Right: detail panel */
+.detail-panel {
+  flex: 1;
+  padding: 16px;
+  overflow-y: auto;
+}
+.detail-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 12px;
+}
+.detail-header .detail-name { font-weight: 700; font-size: 15px; }
+.detail-header .detail-meta { font-size: 12px; color: var(--muted); }
+
+/* Tabs */
+.tab-bar {
+  display: flex; gap: 4px;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 14px;
+}
+.tab-bar .tab {
+  padding: 6px 14px; font-size: 12px; color: var(--muted);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; position: relative;
+  background: none; border-top: none; border-left: none; border-right: none;
+  font-family: inherit;
+}
+.tab-bar .tab.active {
+  font-weight: 600; color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab-bar .tab .tab-badge {
+  background: var(--danger); color: white;
+  font-size: 9px; padding: 1px 5px; border-radius: 8px;
+  margin-left: 4px;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Detail profile rows */
+.detail-row {
+  display: flex; justify-content: space-between;
+  font-size: 12px; padding: 4px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+.detail-row .key { color: var(--muted); }
+.detail-row .val { font-weight: 500; text-align: right; max-width: 60%; }
+
+/* Appointment cards */
+.appt-card {
+  border: 1px solid #e5e7eb; border-radius: 8px;
+  padding: 12px; margin-bottom: 8px; background: white;
+}
+.appt-card.pending {
+  background: #fffbeb; border-color: #fcd34d;
+}
+.appt-card .appt-status { font-size: 12px; font-weight: 600; }
+.appt-card .appt-status.status-requested { color: #92400e; }
+.appt-card .appt-status.status-confirmed { color: #065f46; }
+.appt-card .appt-status.status-declined { color: #991b1b; }
+.appt-card .appt-datetime { font-size: 12px; color: #475569; margin-top: 4px; }
+.appt-card .appt-reason { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.appt-card .appt-actions { display: flex; gap: 6px; margin-top: 8px; }
+.btn-confirm {
+  background: var(--success); color: white; border: none;
+  padding: 4px 10px; border-radius: 6px; font-size: 11px;
+  font-weight: 600; cursor: pointer;
+}
+.btn-confirm:hover { background: #059669; }
+.btn-decline {
+  background: var(--danger); color: white; border: none;
+  padding: 4px 10px; border-radius: 6px; font-size: 11px;
+  font-weight: 600; cursor: pointer;
+}
+.btn-decline:hover { background: #dc2626; }
+
+/* Request appointment button */
+.btn-request-appt {
+  background: var(--accent); color: white; border: none;
+  padding: 5px 12px; border-radius: 6px; font-size: 11px;
+  font-weight: 600; cursor: pointer; transition: background 0.2s;
+}
+.btn-request-appt:hover { background: var(--accent-dark); }
+
+/* Appointment request form (inline) */
+.appt-form {
+  background: var(--accent-light); border: 1px solid var(--accent-border);
+  border-radius: 8px; padding: 14px; margin-bottom: 12px;
+}
+.appt-form label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: #374151; margin-bottom: 4px;
+}
+.appt-form input, .appt-form textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid #e5e7eb;
+  border-radius: 6px; font-size: 13px; margin-bottom: 10px;
+  font-family: inherit; box-sizing: border-box;
+}
+.appt-form .form-actions { display: flex; gap: 8px; }
+
+/* Call overlay during active call */
+.call-overlay {
+  background: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px;
+  text-align: center;
+}
+
+/* Transcript toggle in call history */
+.btn-transcript-toggle {
+  background: none;
+  border: 1px solid #e5e7eb;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.2s;
+}
+.btn-transcript-toggle:hover {
+  background: #f3f4f6;
+  border-color: var(--muted);
+}
+.transcript-block {
+  margin-top: 8px;
+  padding: 10px;
+  background: #f9fafb;
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+}
+.transcript-line {
+  font-size: 12px;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+.transcript-role {
+  font-weight: 600;
+}
+.transcript-role.assistant { color: var(--accent); }
+.transcript-role.user { color: #2563eb; }
+
+/* SIP live call panel */
+.sip-live-panel {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+/* Empty state */
+.empty-state {
+  color: #9ca3af; font-size: 13px; padding: 20px 0;
+}
+
+/* Legacy doctor layout — kept for backward compat, now unused */
 .doctor-layout {
   display: flex;
   gap: 0;
@@ -338,6 +594,20 @@ body {
 .btn-approve:hover { background: #059669; }
 .btn-approve:disabled { background: #6b7280; cursor: default; }
 .approved-tag { color: #059669; font-size: 12px; font-weight: 600; }
+
+/* Patient visit history */
+.visit-history {
+  margin-top: 24px;
+  padding: 0 24px 24px;
+}
+.section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 12px;
+}
 
 .hidden { display: none !important; }
 

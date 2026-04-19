@@ -5,8 +5,8 @@ const PROFILES = [
     specialty: null, hospital: null,
     condition: 'Hypertension, mild anxiety',
     medications: JSON.stringify(['Lisinopril 10mg', 'Propranolol 20mg']),
-    next_appointment: 'Apr 18 — Dr. James Williams',
-    assigned_doctor: 'doctor-1',
+    next_appointment: null,
+    assigned_doctor: null,
     phone_number: '+61 400 000 001',
     extra_details: JSON.stringify({
       medical_history: 'Hypertension diagnosed 2021. Anxiety disorder diagnosed 2022.',
@@ -20,8 +20,8 @@ const PROFILES = [
     specialty: null, hospital: null,
     condition: 'Post-knee-surgery recovery',
     medications: JSON.stringify(['Tramadol 50mg', 'Aspirin 100mg']),
-    next_appointment: 'Apr 20 — Dr. Priya Patel',
-    assigned_doctor: 'doctor-2',
+    next_appointment: null,
+    assigned_doctor: null,
     phone_number: '+61 400 000 002',
     extra_details: JSON.stringify({
       medical_history: 'Right knee replacement Apr 10 2026. Type 2 diabetes (controlled).',
@@ -54,6 +54,30 @@ const PROFILES = [
       qualifications: 'MBBS (Melbourne), FRACS (Orthopaedics)',
       bio: 'Specialises in joint replacement surgery and post-operative rehabilitation.',
       patients: ['Marcus Johnson']
+    })
+  },
+  {
+    id: 'doctor-3', role: 'doctor', name: 'Dr. Emily Nguyen', avatar: 'EN', age: null,
+    specialty: 'General Practitioner', hospital: 'Sunrise Medical Centre',
+    condition: null, medications: null, next_appointment: null, assigned_doctor: null,
+    phone_number: null,
+    extra_details: JSON.stringify({
+      experience: '7 years',
+      languages: ['English', 'Vietnamese'],
+      qualifications: 'MBBS (UNSW), FRACGP',
+      bio: 'Family medicine with a focus on preventive care and chronic disease management.'
+    })
+  },
+  {
+    id: 'doctor-4', role: 'doctor', name: 'Dr. Amir Hassan', avatar: 'AH', age: null,
+    specialty: 'Neurologist', hospital: 'Sydney General Hospital',
+    condition: null, medications: null, next_appointment: null, assigned_doctor: null,
+    phone_number: null,
+    extra_details: JSON.stringify({
+      experience: '15 years',
+      languages: ['English', 'Arabic'],
+      qualifications: 'MBBS (Cairo), PhD Neuroscience (Oxford), FRACP (Neurology)',
+      bio: 'Specialises in headache disorders, epilepsy, and neurodegenerative conditions.'
     })
   }
 ];

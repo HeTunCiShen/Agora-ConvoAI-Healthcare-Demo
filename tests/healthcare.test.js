@@ -15,6 +15,10 @@ function makeApp() {
   app.get('/api/healthcare/profiles', ctrl.listProfiles);
   app.get('/api/healthcare/summaries', ctrl.listSummaries);
   app.post('/api/healthcare/summaries', ctrl.createSummary);
+  app.get('/api/healthcare/profile-summary/:patientId', ctrl.getProfileSummary);
+  app.get('/api/healthcare/appointments', ctrl.listAppointments);
+  app.post('/api/healthcare/appointments', ctrl.createAppointment);
+  app.put('/api/healthcare/appointments/:id', ctrl.updateAppointment);
   app.get('/api/healthcare/care-plans/:patientId', ctrl.getCarePlan);
   app.put('/api/healthcare/care-plans/:id', ctrl.updateCarePlan);
   return app;
@@ -40,10 +44,10 @@ describe('GET /api/healthcare/profiles/:id', () => {
 describe('GET /api/healthcare/profiles', () => {
   const app = makeApp();
 
-  test('returns all 4 profiles when no role filter', async () => {
+  test('returns all 6 profiles when no role filter', async () => {
     const res = await request(app).get('/api/healthcare/profiles');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(4);
+    expect(res.body).toHaveLength(6);
   });
 
   test('filters by role=patient returns 2', async () => {
@@ -53,10 +57,10 @@ describe('GET /api/healthcare/profiles', () => {
     expect(res.body.every(p => p.role === 'patient')).toBe(true);
   });
 
-  test('filters by role=doctor returns 2', async () => {
+  test('filters by role=doctor returns 4', async () => {
     const res = await request(app).get('/api/healthcare/profiles?role=doctor');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(2);
+    expect(res.body).toHaveLength(4);
   });
 });
 
@@ -115,6 +119,138 @@ describe('GET /api/healthcare/care-plans/:patientId', () => {
 
   test('returns 404 for patient with no care plan', async () => {
     const res = await request(app).get('/api/healthcare/care-plans/patient-1');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /api/healthcare/appointments', () => {
+  const app = makeApp();
+
+  test('creates an appointment and returns 201', async () => {
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1',
+      doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:00:00.000Z',
+      reason: 'Follow-up on blood pressure'
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.patient_id).toBe('patient-1');
+    expect(res.body.doctor_id).toBe('doctor-1');
+    expect(res.body.status).toBe('requested');
+    expect(res.body.reason).toBe('Follow-up on blood pressure');
+    expect(res.body.id).toBeDefined();
+  });
+
+  test('returns 400 when patient_id missing', async () => {
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:00:00.000Z'
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when doctor_id missing', async () => {
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1',
+      date_time: '2026-04-22T10:00:00.000Z'
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test('returns 400 when date_time missing', async () => {
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1',
+      doctor_id: 'doctor-1'
+    });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /api/healthcare/appointments', () => {
+  test('returns empty array when no appointments', async () => {
+    const app = makeApp();
+    const res = await request(app).get('/api/healthcare/appointments');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  test('filters by patient_id', async () => {
+    const app = makeApp();
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:00:00.000Z', reason: 'Check-up'
+    });
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-2', doctor_id: 'doctor-2',
+      date_time: '2026-04-23T14:00:00.000Z', reason: 'Post-op'
+    });
+
+    const res = await request(app).get('/api/healthcare/appointments?patient_id=patient-1');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].patient_id).toBe('patient-1');
+  });
+
+  test('filters by doctor_id', async () => {
+    const app = makeApp();
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:00:00.000Z', reason: 'Check-up'
+    });
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-2', doctor_id: 'doctor-2',
+      date_time: '2026-04-23T14:00:00.000Z', reason: 'Post-op'
+    });
+
+    const res = await request(app).get('/api/healthcare/appointments?doctor_id=doctor-2');
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].doctor_id).toBe('doctor-2');
+  });
+
+  test('includes patient_name and doctor_name via JOIN', async () => {
+    const app = makeApp();
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:00:00.000Z', reason: 'Check-up'
+    });
+    const res = await request(app).get('/api/healthcare/appointments?patient_id=patient-1');
+    expect(res.body[0].patient_name).toBe('Sarah Chen');
+    expect(res.body[0].doctor_name).toBe('Dr. James Williams');
+  });
+});
+
+describe('PUT /api/healthcare/appointments/:id', () => {
+  const app = makeApp();
+
+  test('confirms an appointment', async () => {
+    const create = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:00:00.000Z', reason: 'Check-up'
+    });
+    const res = await request(app)
+      .put(`/api/healthcare/appointments/${create.body.id}`)
+      .send({ status: 'confirmed' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('confirmed');
+  });
+
+  test('declines an appointment', async () => {
+    const create = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:00:00.000Z', reason: 'Check-up'
+    });
+    const res = await request(app)
+      .put(`/api/healthcare/appointments/${create.body.id}`)
+      .send({ status: 'declined' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('declined');
+  });
+
+  test('returns 404 for unknown appointment id', async () => {
+    const res = await request(app)
+      .put('/api/healthcare/appointments/bad-id')
+      .send({ status: 'confirmed' });
     expect(res.status).toBe(404);
   });
 });

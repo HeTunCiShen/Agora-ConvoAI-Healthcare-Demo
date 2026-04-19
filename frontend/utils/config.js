@@ -58,10 +58,19 @@ const API = {
                 body: JSON.stringify(data)
             }),
         
+        startSIPCall: (data) =>
+            API.request('/agora/call', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            }),
+
         stopConversation: (agentId) =>
             API.request(`/agora/stop/${agentId}`, {
                 method: 'DELETE'
-            })
+            }),
+
+        getAgentStatus: (agentId) =>
+            API.request(`/agora/status/${agentId}`)
     },
 
     healthcare: {
@@ -69,12 +78,20 @@ const API = {
         API.request(`/healthcare/profiles/${id}`),
       listProfiles: (role) =>
         API.request(`/healthcare/profiles${role ? '?role=' + role : ''}`),
-      listSummaries: () =>
-        API.request('/healthcare/summaries'),
+      listSummaries: (patientId) =>
+        API.request(`/healthcare/summaries${patientId ? '?patient_id=' + patientId : ''}`),
       createSummary: (data) =>
         API.request('/healthcare/summaries', { method: 'POST', body: JSON.stringify(data) }),
       summarize: (data) =>
         API.request('/healthcare/summarize', { method: 'POST', body: JSON.stringify(data) }),
+      getProfileSummary: (patientId) =>
+        API.request(`/healthcare/profile-summary/${patientId}`),
+      listAppointments: (params) =>
+        API.request(`/healthcare/appointments${params ? '?' + new URLSearchParams(params) : ''}`),
+      createAppointment: (data) =>
+        API.request('/healthcare/appointments', { method: 'POST', body: JSON.stringify(data) }),
+      updateAppointment: (id, data) =>
+        API.request(`/healthcare/appointments/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
       getCarePlan: (patientId) =>
         API.request(`/healthcare/care-plans/${patientId}`),
       updateCarePlan: (id, data) =>

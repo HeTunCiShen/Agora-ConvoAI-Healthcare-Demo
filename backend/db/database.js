@@ -36,6 +36,7 @@ function createDb(dbPath) {
       urgency TEXT DEFAULT 'low',
       transcript_excerpt TEXT,
       suggested_action TEXT,
+      transcript TEXT,
       media_attachment_ids TEXT,
       created_at TEXT NOT NULL
     );
@@ -57,6 +58,24 @@ function createDb(dbPath) {
       status TEXT DEFAULT 'pending-review',
       doctor_notes TEXT,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS appointments (
+      id TEXT PRIMARY KEY,
+      patient_id TEXT NOT NULL,
+      doctor_id TEXT NOT NULL,
+      date_time TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'requested',
+      reason TEXT DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS patient_profile_summaries (
+      patient_id TEXT PRIMARY KEY,
+      summary_text TEXT NOT NULL,
+      call_count INTEGER DEFAULT 0,
       updated_at TEXT NOT NULL
     );
 

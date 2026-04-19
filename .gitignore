@@ -47,3 +47,6 @@ CLAUDE_sessions/
 
 # SQLite database
 backend/db/healthcare.db
+
+# Superpowers brainstorm artifacts
+.superpowers/

@@ -11,16 +11,15 @@ describe('seed data', () => {
     expect(rows).toHaveLength(2);
   });
 
-  test('seeds 2 doctors', () => {
+  test('seeds 4 doctors', () => {
     const rows = db.prepare("SELECT * FROM profiles WHERE role='doctor'").all();
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(4);
   });
 
-  test('patient-1 is Sarah Chen assigned to doctor-1', () => {
+  test('patient-1 is Sarah Chen', () => {
     const row = db.prepare("SELECT * FROM profiles WHERE id='patient-1'").get();
     expect(row.name).toBe('Sarah Chen');
     expect(row.age).toBe(34);
-    expect(row.assigned_doctor).toBe('doctor-1');
   });
 
   test('patient-2 has a pending-review care plan', () => {
@@ -29,9 +28,9 @@ describe('seed data', () => {
     expect(row.status).toBe('pending-review');
   });
 
-  test('seed is idempotent — running twice keeps 4 profiles', () => {
+  test('seed is idempotent — running twice keeps 6 profiles', () => {
     seed(db);
     const rows = db.prepare('SELECT * FROM profiles').all();
-    expect(rows).toHaveLength(4);
+    expect(rows).toHaveLength(6);
   });
 });

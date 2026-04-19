@@ -7,7 +7,8 @@
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
     "build": "echo 'No build step required for vanilla JS frontend'",
-    "test": "jest"
+    "test": "jest --testPathIgnorePatterns='integration'",
+    "test:integration": "jest --testPathPattern='integration'"
   },
   "dependencies": {
     "agora-access-token": "^2.0.4",

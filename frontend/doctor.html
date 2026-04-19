@@ -29,72 +29,69 @@
       <button id="switch-user-btn" class="switch-user-btn">Switch Doctor</button>
     </div>
 
-    <div id="profile-card-container"></div>
-
-    <div class="doctor-layout">
-      <!-- Patient summary feed -->
-      <div class="feed-panel">
-        <h2>Patient Summaries</h2>
-        <div id="summary-feed"></div>
-      </div>
-
-      <!-- AI assistant panel -->
-      <div class="ai-panel">
-        <h2>AI Assistant</h2>
-
-        <section id="agent-state" class="agent-state state-offline">
+    <!-- Top bar: profile + AI call controls -->
+    <div class="top-bar">
+      <div class="profile-section" id="top-bar-profile"></div>
+      <div class="call-controls">
+        <section id="agent-state" class="agent-state state-offline" style="margin:0;padding:4px 8px;">
           <div class="state-indicator">
             <span class="state-dot"></span>
             <span class="state-text">offline</span>
           </div>
         </section>
+        <button id="call-btn" class="btn primary" style="padding:6px 14px;font-size:12px;">
+          <span class="btn-text">📞 Call AI Assistant</span>
+          <span class="btn-loading" style="display:none">Connecting…</span>
+        </button>
+        <button id="end-call-btn" class="btn danger hidden" style="padding:6px 14px;font-size:12px;">
+          <span class="btn-text">End Call</span>
+          <span class="btn-loading" style="display:none">Ending…</span>
+        </button>
+      </div>
+    </div>
 
-        <section id="ai-visualizer" class="ai-visualizer">
-          <div id="avatar-container" class="avatar-container hidden"></div>
-          <div class="visualizer-container">
-            <div class="wave-bars">
-              <div class="wave-bar"></div><div class="wave-bar"></div>
-              <div class="wave-bar"></div><div class="wave-bar"></div>
-              <div class="wave-bar"></div><div class="wave-bar"></div>
-              <div class="wave-bar"></div><div class="wave-bar"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="controls">
-          <button id="call-btn" class="btn primary">
-            <span class="btn-text">📞 Call AI Assistant</span>
-            <span class="btn-loading" style="display:none">Connecting…</span>
-          </button>
-          <button id="end-call-btn" class="btn danger hidden">
-            <span class="btn-text">End Call</span>
-            <span class="btn-loading" style="display:none">Ending…</span>
-          </button>
-        </section>
-
-        <!-- Chat -->
-        <div id="chatToggle" class="chat-toggle" style="display:none;position:static;width:40px;height:40px;font-size:18px">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M8 12h8M8 8h8M8 16h5M7 20l4-4h6a3 3 0 003-3V7a3 3 0 00-3-3H7a3 3 0 00-3 3v10a3 3 0 003 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <!-- Call overlay: avatar + visualizer (shown during call) -->
+    <div id="call-overlay" class="call-overlay hidden">
+      <div id="avatar-container" class="avatar-container hidden"></div>
+      <div class="visualizer-container">
+        <div class="wave-bars">
+          <div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div>
+          <div class="wave-bar"></div><div class="wave-bar"></div>
         </div>
       </div>
     </div>
 
-    <!-- Chat panel (fixed, right side) -->
-    <div id="chatPanel" class="chat-panel">
-      <div class="chat-header"><h3>Chat with AI</h3><button id="closeChatBtn" class="close-btn">×</button></div>
-      <div class="chat-messages" id="chatMessages"></div>
-      <div id="typingIndicator" class="typing-indicator" style="display:none">
-        <div class="typing-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-        <span>thinking…</span>
+    <!-- Master-detail layout -->
+    <div class="master-detail">
+      <div class="master-panel" id="patient-list">
+        <div class="panel-title">Patients</div>
       </div>
-      <div class="chat-input">
-        <input type="text" id="messageInput" placeholder="Start the conversation to begin chatting…" disabled />
-        <button id="sendBtn" class="send-btn" disabled>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </button>
+      <div class="detail-panel" id="detail-panel">
+        <p class="empty-state">Select a patient to view details</p>
       </div>
-      <div class="chat-actions"><button id="clearChatBtn" class="clear-btn">Clear Chat</button></div>
     </div>
+  </div>
+
+  <!-- Chat panel -->
+  <div id="chatToggle" class="chat-toggle" style="display:none">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 12h8M8 8h8M8 16h5M7 20l4-4h6a3 3 0 003-3V7a3 3 0 00-3-3H7a3 3 0 00-3 3v10a3 3 0 003 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </div>
+  <div id="chatPanel" class="chat-panel">
+    <div class="chat-header"><h3>Chat with AI</h3><button id="closeChatBtn" class="close-btn">×</button></div>
+    <div class="chat-messages" id="chatMessages"></div>
+    <div id="typingIndicator" class="typing-indicator" style="display:none">
+      <div class="typing-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+      <span>thinking…</span>
+    </div>
+    <div class="chat-input">
+      <input type="text" id="messageInput" placeholder="Start the conversation to begin chatting…" disabled />
+      <button id="sendBtn" class="send-btn" disabled>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+    <div class="chat-actions"><button id="clearChatBtn" class="clear-btn">Clear Chat</button></div>
   </div>
 
   <script src="/utils/config.js"></script>
