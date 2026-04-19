@@ -8,9 +8,7 @@ const sse = require('../sse');
 
 const dbPath = process.env.NODE_ENV === 'test'
   ? ':memory:'
-  : process.env.VERCEL
-    ? '/tmp/healthcare.db'
-    : path.join(__dirname, '../db/healthcare.db');
+  : path.join(__dirname, '../db/healthcare.db');
 
 const db = createDb(dbPath);
 seed(db);
