@@ -43,11 +43,6 @@ app.use(express.static(path.join(projectRoot, 'frontend'), {
   }
 }));
 app.use('/src', express.static(path.join(projectRoot, 'src')));
-app.use('/lib', express.static(path.join(projectRoot, 'node_modules'), {
-  setHeaders: (res, filePath) => {
-    if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
-  }
-}));
 
 // Auth on all /api routes
 app.use('/api', basicAuth);
