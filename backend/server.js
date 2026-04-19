@@ -34,15 +34,16 @@ app.get('/health', (req, res) => {
 // SSE endpoint — must be BEFORE basicAuth so EventSource can connect without auth headers
 app.get('/events', (req, res) => addClient(res));
 
-// Static files
-app.use(express.static(path.join(__dirname, '../frontend'), {
+// Static files — use process.cwd() for Vercel compatibility (serverless __dirname differs)
+const projectRoot = process.cwd();
+app.use(express.static(path.join(projectRoot, 'frontend'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.css')) res.setHeader('Content-Type', 'text/css');
     else if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
   }
 }));
-app.use('/src', express.static(path.join(__dirname, '../src')));
-app.use('/lib', express.static(path.join(__dirname, '../node_modules'), {
+app.use('/src', express.static(path.join(projectRoot, 'src')));
+app.use('/lib', express.static(path.join(projectRoot, 'node_modules'), {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.js')) res.setHeader('Content-Type', 'application/javascript');
   }
@@ -69,15 +70,15 @@ function serveHtml(filePath, res) {
 }
 
 app.get('/patient', (req, res) => {
-  serveHtml(path.join(__dirname, '../frontend/patient.html'), res);
+  serveHtml(path.join(projectRoot, 'frontend/patient.html'), res);
 });
 
 app.get('/doctor', (req, res) => {
-  serveHtml(path.join(__dirname, '../frontend/doctor.html'), res);
+  serveHtml(path.join(projectRoot, 'frontend/doctor.html'), res);
 });
 
 app.get('/', basicAuth, (req, res) => {
-  serveHtml(path.join(__dirname, '../frontend/index.html'), res);
+  serveHtml(path.join(projectRoot, 'frontend/index.html'), res);
 });
 
 // Only start listening when run directly (not during tests)
