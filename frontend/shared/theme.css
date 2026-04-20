@@ -407,6 +407,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  text-decoration: none;
 }
 .switch-user-btn:hover { background: var(--surface-container); color: var(--primary); }
 
