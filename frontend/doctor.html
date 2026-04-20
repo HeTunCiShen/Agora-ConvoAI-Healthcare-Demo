@@ -49,23 +49,7 @@
       <div class="profile-section" id="top-bar-profile"></div>
     </div>
 
-    <!-- Fixed call controls: bottom-left (button on top, status below) -->
-    <div class="call-controls-fixed">
-      <button id="call-btn" class="btn primary">
-        <span class="btn-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">phone_in_talk</span> Call AI Assistant</span>
-        <span class="btn-loading" style="display:none">Connecting…</span>
-      </button>
-      <button id="end-call-btn" class="btn danger hidden">
-        <span class="btn-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">call_end</span> End Call</span>
-        <span class="btn-loading" style="display:none">Ending…</span>
-      </button>
-      <section id="agent-state" class="agent-state state-offline">
-        <div class="state-indicator">
-          <span class="state-dot"></span>
-          <span class="state-text">offline</span>
-        </div>
-      </section>
-    </div>
+    <div id="mobile-call-slot" class="mobile-call-slot" hidden></div>
 
     <!-- Master-detail layout -->
     <div class="master-detail">
@@ -75,6 +59,23 @@
       <div class="detail-panel" id="detail-panel">
         <p class="empty-state">Select a patient to view details</p>
       </div>
+    </div>
+
+    <div id="call-controls-fixed" class="call-controls-fixed mobile-call-controls">
+      <button type="button" class="btn primary call-ai-main-btn js-start-call-doctor">
+        <span class="btn-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">phone_in_talk</span> Call AI Assistant</span>
+        <span class="btn-loading" style="display:none">Connecting…</span>
+      </button>
+      <button type="button" class="btn danger call-ai-end-btn js-end-call hidden">
+        <span class="btn-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">call_end</span> End Call</span>
+        <span class="btn-loading" style="display:none">Ending…</span>
+      </button>
+      <section class="agent-state call-agent-state state-offline">
+        <div class="state-indicator">
+          <span class="state-dot"></span>
+          <span class="state-text">offline</span>
+        </div>
+      </section>
     </div>
   </div>
 

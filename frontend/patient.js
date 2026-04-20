@@ -23,6 +23,7 @@
   // Master-detail state
   let allDoctors = [];
   let selectedDoctorId = null;
+  let callChromeResizeTimer = null;
 
   // ===========================
   // INIT
@@ -153,6 +154,189 @@
     document.getElementById('detail-panel').classList.remove('mobile-open');
   }
 
+  function isDesktopLayout() {
+    return window.innerWidth > 768;
+  }
+
+  function resetAvatarMediaSlot() {
+    const container = document.getElementById('avatar-container');
+    if (!container) return;
+    const poster = container.querySelector('.avatar-poster');
+    container.querySelectorAll('video').forEach(v => {
+      try { v.pause(); } catch (_) {}
+      v.remove();
+    });
+    Array.from(container.children).forEach(child => {
+      const keep = child.classList.contains('avatar-poster') || child.id === 'avatar-audio-visual';
+      if (!keep) child.remove();
+    });
+    if (poster) poster.classList.remove('hidden');
+  }
+
+  function showAvatarAudioVisualLayer() {
+    const el = document.getElementById('avatar-audio-visual');
+    if (el) el.classList.remove('hidden');
+  }
+
+  function hideAvatarAudioVisualLayer() {
+    const el = document.getElementById('avatar-audio-visual');
+    if (el) el.classList.add('hidden');
+    if (window.audioVisualizer) window.audioVisualizer.stopFrequencyAnalysis();
+  }
+
+  function restartCallAudioVisualizerIfNeeded() {
+    if (!agoraConvoAIAgentID || !rtcJoined) return;
+    const uid = avatarUID || agentUID;
+    const u = uid ? rtcRemoteUsers[uid] : null;
+    if (!u || !u.audioTrack) return;
+    const vid = document.querySelector('#avatar-container video');
+    if (vid && vid.readyState >= 2) return;
+    showAvatarAudioVisualLayer();
+    setTimeout(() => {
+      if (!agoraConvoAIAgentID || !rtcJoined || !window.audioVisualizer) return;
+      const layer = document.getElementById('avatar-audio-visual');
+      if (!layer || layer.classList.contains('hidden')) return;
+      window.audioVisualizer.startFrequencyAnalysis(u.audioTrack);
+    }, 300);
+  }
+
+  function hideAvatarPosterWhenVideoReady(container) {
+    const maxAttempts = 80;
+    const tick = attempt => {
+      const vid = container.querySelector('video');
+      if (!vid) {
+        if (attempt < maxAttempts) setTimeout(() => tick(attempt + 1), 50);
+        return;
+      }
+      const onVideoPresentable = () => {
+        const p = container.querySelector('.avatar-poster');
+        if (p) p.classList.add('hidden');
+        hideAvatarAudioVisualLayer();
+      };
+      if (vid.readyState >= 2) onVideoPresentable();
+      else {
+        vid.addEventListener('playing', onVideoPresentable, { once: true });
+        vid.addEventListener('loadeddata', onVideoPresentable, { once: true });
+      }
+    };
+    tick(0);
+  }
+
+  function getDesktopCallGlass() {
+    return document.querySelector('#detail-panel .call-inline-panel[data-call-chrome="1"] .call-glass-panel');
+  }
+
+  function ensureDesktopCallChrome() {
+    const panel = document.getElementById('detail-panel');
+    if (!panel || !panel.querySelector('.detail-content-area')) return;
+    let chrome = panel.querySelector('.call-inline-panel[data-call-chrome="1"]');
+    if (!chrome) {
+      const tabContent = panel.querySelector('.detail-content-area');
+      if (tabContent) tabContent.classList.add('detail-content-left');
+      chrome = document.createElement('div');
+      chrome.className = 'call-inline-panel';
+      chrome.dataset.callChrome = '1';
+      chrome.innerHTML = `
+        <div class="call-glass-panel call-glass-panel--desktop">
+          <div class="call-inline-controls">
+            <button type="button" class="btn primary call-ai-main-btn call-ai-main-btn--desktop js-start-call-patient">
+              <span class="btn-text"><span class="material-symbols-outlined" style="font-size:20px;vertical-align:middle">phone_in_talk</span> Call AI Assistant</span>
+              <span class="btn-loading" style="display:none">Connecting…</span>
+            </button>
+            <button type="button" class="btn danger call-ai-end-btn js-end-call hidden">
+              <span class="btn-text"><span class="material-symbols-outlined" style="font-size:18px;vertical-align:middle">call_end</span> End Call</span>
+              <span class="btn-loading" style="display:none">Ending…</span>
+            </button>
+            <section class="agent-state call-agent-state state-offline">
+              <div class="state-indicator">
+                <span class="state-dot"></span>
+                <span class="state-text">offline</span>
+              </div>
+            </section>
+          </div>
+          <div class="call-idle-cover">
+            <img src="/shared/cover.png" alt="" width="320" height="569" decoding="async" />
+          </div>
+          <div id="call-active-region" class="call-active-region hidden">
+            <div id="avatar-container" class="avatar-container">
+              <img class="avatar-poster" src="/shared/cover.png" alt="" width="320" height="569" decoding="async" />
+              <div id="avatar-audio-visual" class="avatar-audio-visual hidden">
+                <div class="visualizer-container visualizer-avatar-frame">
+                  <div class="wave-bars">
+                    <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                    <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      panel.appendChild(chrome);
+      panel.classList.add('detail-with-call');
+    }
+    syncCallChromeAfterDetailRender();
+  }
+
+  function syncCallChromeAfterDetailRender() {
+    const inCall = Boolean(agoraConvoAIAgentID && rtcJoined);
+    if (inCall) {
+      const region = document.getElementById('call-active-region');
+      const cover = document.querySelector('#detail-panel .call-idle-cover');
+      if (cover) cover.classList.add('hidden');
+      if (region) {
+        region.classList.remove('hidden');
+        if (!isDesktopLayout()) mountCallActiveToMobileSlot();
+      }
+      const avatarUser = avatarUID ? rtcRemoteUsers[avatarUID] : null;
+      if (avatarUser && avatarUser.videoTrack) {
+        const container = document.getElementById('avatar-container');
+        if (container) {
+          container.classList.remove('hidden');
+          if (!container.querySelector('video')) {
+            const poster = container.querySelector('.avatar-poster');
+            if (poster) poster.classList.remove('hidden');
+          }
+          avatarUser.videoTrack.play(container);
+          hideAvatarPosterWhenVideoReady(container);
+        }
+      }
+    } else {
+      resetCallChromeToIdle();
+    }
+  }
+
+  function mountCallActiveToMobileSlot() {
+    const slot = document.getElementById('mobile-call-slot');
+    const region = document.getElementById('call-active-region');
+    if (!slot || !region) return;
+    slot.innerHTML = '<div class="call-mobile-visual call-glass-panel call-glass-panel--mobile"></div>';
+    slot.querySelector('.call-mobile-visual').appendChild(region);
+    slot.hidden = false;
+  }
+
+  function unmountCallActiveFromMobileSlot() {
+    const glass = getDesktopCallGlass();
+    const region = document.getElementById('call-active-region');
+    const slot = document.getElementById('mobile-call-slot');
+    if (region && glass && region.parentElement !== glass) {
+      glass.appendChild(region);
+    }
+    if (slot) {
+      slot.innerHTML = '';
+      slot.hidden = true;
+    }
+  }
+
+  function resetCallChromeToIdle() {
+    unmountCallActiveFromMobileSlot();
+    hideAvatarAudioVisualLayer();
+    resetAvatarMediaSlot();
+    const cover = document.querySelector('#detail-panel .call-idle-cover');
+    if (cover) cover.classList.remove('hidden');
+    const region = document.getElementById('call-active-region');
+    if (region) region.classList.add('hidden');
+  }
+
   // ===========================
   // DETAIL PANEL
   // ===========================
@@ -170,7 +354,6 @@
           <div class="detail-name">${doctor.name}</div>
           <div class="detail-meta">${doctor.specialty || ''} · ${doctor.hospital || ''}</div>
         </div>
-        <button class="btn-request-appt" id="btn-request-appt">+ Request Appointment</button>
       </div>
       <div class="detail-content-area">
         <div class="tab-bar">
@@ -194,61 +377,12 @@
       });
     });
 
-    // Request appointment button
-    document.getElementById('btn-request-appt').addEventListener('click', () => showAppointmentForm(doctorId));
-
     // Render all tabs
     renderProfileTab(doctor);
     await renderCallHistoryTab(doctorId);
     await renderAppointmentsTab(doctorId);
 
-    // If a call is active, re-inject the call panel
-    if (agoraConvoAIAgentID && !document.getElementById('end-call-btn').classList.contains('hidden')) {
-      injectCallPanel();
-    }
-  }
-
-  function injectCallPanel() {
-    const panel = document.getElementById('detail-panel');
-    if (panel.querySelector('.call-inline-panel')) return;
-    const tabContent = panel.querySelector('.detail-content-area');
-    if (tabContent) tabContent.classList.add('detail-content-left');
-    const callPanel = document.createElement('div');
-    callPanel.className = 'call-inline-panel';
-    callPanel.innerHTML = `
-      <div class="call-glass-panel">
-        <div class="call-glass-header">
-          <span class="call-glass-label">AI Health Assistant</span>
-          <span class="call-status-badge">
-            <span class="call-status-dot"></span>
-            <span class="call-status-text">Speaking</span>
-          </span>
-        </div>
-        <div id="avatar-container" class="avatar-container hidden"></div>
-        <div class="visualizer-container">
-          <div class="wave-bars">
-            <div class="wave-bar"></div><div class="wave-bar"></div>
-            <div class="wave-bar"></div><div class="wave-bar"></div>
-            <div class="wave-bar"></div><div class="wave-bar"></div>
-            <div class="wave-bar"></div><div class="wave-bar"></div>
-          </div>
-        </div>
-      </div>
-    `;
-    panel.appendChild(callPanel);
-    panel.classList.add('detail-with-call');
-
-    // Re-attach avatar video if it was playing
-    const avatarUser = avatarUID ? rtcRemoteUsers[avatarUID] : null;
-    if (avatarUser && avatarUser.videoTrack) {
-      const container = document.getElementById('avatar-container');
-      if (container) {
-        avatarUser.videoTrack.play(container);
-        container.classList.remove('hidden');
-        const vc = panel.querySelector('.visualizer-container');
-        if (vc) vc.classList.add('hidden');
-      }
-    }
+    ensureDesktopCallChrome();
   }
 
   function renderProfileTab(doctor) {
@@ -320,11 +454,16 @@
       const all = await API.healthcare.listAppointments({ patient_id: selectedProfile.id });
       console.log('[appointments] patient=%s doctor=%s total=%d filtered=%d', selectedProfile.id, doctorId, all.length, all.filter(a => a.doctor_id === doctorId).length, all);
       const appointments = all.filter(a => a.doctor_id === doctorId);
+      const requestBtn = `
+        <div class="appointments-tab-actions">
+          <button type="button" class="btn-request-appt" id="btn-request-appt-tab">+ Request Appointment</button>
+        </div>`;
       if (appointments.length === 0) {
-        container.innerHTML = '<p class="empty-state">No appointments with this doctor yet.</p>';
+        container.innerHTML = requestBtn + '<p class="empty-state">No appointments with this doctor yet.</p>';
+        document.getElementById('btn-request-appt-tab').addEventListener('click', () => showAppointmentForm(doctorId));
         return;
       }
-      container.innerHTML = appointments.map(a => {
+      container.innerHTML = requestBtn + appointments.map(a => {
         const dt = new Date(a.date_time).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         const statusLabel = a.status === 'requested' ? '⏳ Requested' : a.status === 'confirmed' ? '✓ Confirmed' : '✗ Declined';
         const withLine = a.doctor_name
@@ -339,6 +478,7 @@
           </div>
         `;
       }).join('');
+      document.getElementById('btn-request-appt-tab').addEventListener('click', () => showAppointmentForm(doctorId));
     } catch (e) {
       container.innerHTML = '<p class="empty-state">Failed to load appointments.</p>';
     }
@@ -399,8 +539,20 @@
   // EVENT LISTENERS
   // ===========================
   function setupEventListeners() {
-    document.getElementById('call-btn').addEventListener('click', () => startCall('patient'));
-    document.getElementById('end-call-btn').addEventListener('click', stopCall);
+    const main = document.getElementById('main-page');
+    if (main && !main.dataset.callDelegation) {
+      main.dataset.callDelegation = '1';
+      main.addEventListener('click', (e) => {
+        if (e.target.closest('.js-start-call-patient')) {
+          e.preventDefault();
+          startCall('patient');
+        }
+        if (e.target.closest('.js-end-call')) {
+          e.preventDefault();
+          stopCall();
+        }
+      });
+    }
     document.getElementById('switch-user-btn').addEventListener('click', () => {
       sessionStorage.removeItem('selectedPatient');
       location.reload();
@@ -419,6 +571,16 @@
         navigator.sendBeacon(url, '');
       }
     });
+
+    window.addEventListener('resize', () => {
+      clearTimeout(callChromeResizeTimer);
+      callChromeResizeTimer = setTimeout(() => {
+        if (!agoraConvoAIAgentID || !rtcJoined) return;
+        if (isDesktopLayout()) unmountCallActiveFromMobileSlot();
+        else mountCallActiveToMobileSlot();
+        syncCallChromeAfterDetailRender();
+      }, 120);
+    });
   }
 
   // ===========================
@@ -434,7 +596,7 @@
       console.log('[RTC] user-left uid=%s reason=%s', user.uid, reason);
       // Fix 4: if agent/avatar leaves unexpectedly, auto-reset UI
       const isCallUser = user.uid == agentUID || (avatarUID && user.uid == avatarUID);
-      if (isCallUser && !document.getElementById('end-call-btn').classList.contains('hidden')) {
+      if (isCallUser && Array.from(document.querySelectorAll('.call-ai-end-btn')).some(b => !b.classList.contains('hidden'))) {
         console.log('[RTC] agent left unexpectedly — auto-resetting UI');
         stopCall();
       }
@@ -462,7 +624,7 @@
   // ===========================
   async function startCall(callType) {
     currentCallType = callType;
-    document.getElementById('call-btn').setAttribute('disabled', 'true');
+    document.querySelectorAll('.call-ai-main-btn').forEach(b => b.setAttribute('disabled', 'true'));
     setCallButtonLoading(callType, true);
 
     try {
@@ -516,7 +678,8 @@
         try {
           const st = await API.agora.getAgentStatus(_pollId);
           console.log('[startCall] agent status at 5s:', JSON.stringify(st));
-          if (st.status === 'RUNNING' && document.getElementById('end-call-btn').classList.contains('hidden')) {
+          const endBtns = Array.from(document.querySelectorAll('.call-ai-end-btn'));
+          if (st.status === 'RUNNING' && endBtns.length && endBtns.every(b => b.classList.contains('hidden'))) {
             console.log('[startCall] agent RUNNING but UI not started — forcing onCallStarted()');
             onCallStarted();
           }
@@ -527,7 +690,7 @@
     } catch (e) {
       console.error('Failed to start call', e);
       setCallButtonLoading(callType, false);
-      document.getElementById('call-btn').removeAttribute('disabled');
+      document.querySelectorAll('.call-ai-main-btn').forEach(b => b.removeAttribute('disabled'));
     }
   }
 
@@ -592,11 +755,26 @@
         name: d.name,
         specialty: d.specialty || ''
       }));
+      let existing_appointments = [];
+      try {
+        const appts = await API.healthcare.listAppointments({ patient_id: profile.id });
+        existing_appointments = appts
+          .filter(a => a.status !== 'declined')
+          .map(a => ({
+            doctor_id: a.doctor_id,
+            date_time: a.date_time,
+            status: a.status,
+            reason: a.reason || ''
+          }));
+      } catch (e) {
+        console.warn('[stopCall] could not load appointments for summarize context:', e.message);
+      }
       API.healthcare.summarize({
         transcript,
         call_type: callType,
         care_team,
-        default_doctor_id: 'doctor-3'
+        default_doctor_id: 'doctor-3',
+        existing_appointments
       })
         .then(async (summary) => {
           await API.healthcare.createSummary({ patient_id: profile.id, ...summary, transcript });
@@ -607,16 +785,30 @@
           const apptRequests = summary.appointment_requests || (summary.appointment_request ? [summary.appointment_request] : []);
           for (const appt of apptRequests) {
             if (!appt || !appt.doctor_name) continue;
+            if (!appt.date_time || typeof appt.date_time !== 'string') {
+              console.warn('[stopCall] skip appointment_requests entry without date_time (avoid bogus bookings)');
+              continue;
+            }
             const doctor = allDoctors.find(d =>
               d.name.toLowerCase().includes(appt.doctor_name.toLowerCase()) ||
               appt.doctor_name.toLowerCase().includes(d.name.replace('Dr. ', '').toLowerCase())
             );
             if (doctor) {
               try {
+                const wantTs = Date.parse(appt.date_time);
+                const dup = existing_appointments.some(ex => {
+                  if (ex.doctor_id !== doctor.id || ex.status === 'declined') return false;
+                  const exTs = Date.parse(ex.date_time);
+                  return !Number.isNaN(wantTs) && !Number.isNaN(exTs) && Math.abs(wantTs - exTs) < 2 * 60 * 60 * 1000;
+                });
+                if (dup) {
+                  console.warn('[stopCall] skip duplicate appointment vs existing calendar:', appt);
+                  continue;
+                }
                 await API.healthcare.createAppointment({
                   patient_id: profile.id,
                   doctor_id: doctor.id,
-                  date_time: appt.date_time || new Date().toISOString(),
+                  date_time: appt.date_time,
                   reason: appt.reason || summary.chief_complaint || ''
                 });
                 if (!createdForDoctorId) createdForDoctorId = doctor.id;
@@ -678,35 +870,39 @@
         if (isCallAudio) {
           onCallStarted();
           setTimeout(() => {
-            if (window.audioVisualizer) window.audioVisualizer.startFrequencyAnalysis(user.audioTrack);
-          }, 1000);
+            if (!agoraConvoAIAgentID || !rtcJoined || !window.audioVisualizer) return;
+            const layer = document.getElementById('avatar-audio-visual');
+            if (!layer || layer.classList.contains('hidden')) return;
+            window.audioVisualizer.startFrequencyAnalysis(user.audioTrack);
+          }, 400);
         }
       }).catch(err => console.error('[RTC] subscribe error:', err));
     } else if (mediaType === 'video' && avatarUID && user.uid == avatarUID) {
       rtcClient.subscribe(user, mediaType).then(() => {
         const container = document.getElementById('avatar-container');
         if (container) {
-          user.videoTrack.play(container);
           container.classList.remove('hidden');
-          const vc = document.querySelector('.visualizer-container');
-          if (vc) vc.classList.add('hidden');
+          user.videoTrack.play(container);
+          hideAvatarPosterWhenVideoReady(container);
         }
       });
     }
   }
 
-  function handleRTCUserUnpublished(user) {
+  function handleRTCUserUnpublished(user, mediaType) {
+    if (mediaType === 'video' && avatarUID && user.uid == avatarUID) {
+      try {
+        if (user.videoTrack) user.videoTrack.stop();
+      } catch (_) {}
+      resetAvatarMediaSlot();
+      if (agoraConvoAIAgentID && rtcJoined) restartCallAudioVisualizerIfNeeded();
+      return;
+    }
     delete rtcRemoteUsers[user.uid];
     const isCallUser = user.uid == agentUID || (avatarUID && user.uid == avatarUID);
-    if (isCallUser) {
+    if (isCallUser && mediaType === 'audio') {
       if (window.audioVisualizer) window.audioVisualizer.stopFrequencyAnalysis();
       updateAgentStateUI('offline');
-    }
-    if (avatarUID && user.uid == avatarUID) {
-      const container = document.getElementById('avatar-container');
-      if (container) container.classList.add('hidden');
-      const vc = document.querySelector('.visualizer-container');
-      if (vc) vc.classList.remove('hidden');
     }
   }
 
@@ -749,27 +945,49 @@
   // ===========================
   function onCallStarted() {
     setCallButtonLoading(currentCallType, false);
-    document.getElementById('call-btn').classList.add('hidden');
-    document.getElementById('end-call-btn').classList.remove('hidden');
+    document.querySelectorAll('.call-ai-main-btn').forEach(b => {
+      b.removeAttribute('disabled');
+      b.classList.add('hidden');
+    });
+    document.querySelectorAll('.call-ai-end-btn').forEach(b => b.classList.remove('hidden'));
     updateAgentStateUI('speaking');
-    injectCallPanel();
+    ensureDesktopCallChrome();
+    const cover = document.querySelector('#detail-panel .call-idle-cover');
+    if (cover) cover.classList.add('hidden');
+    const region = document.getElementById('call-active-region');
+    if (region) {
+      region.classList.remove('hidden');
+      if (!isDesktopLayout()) mountCallActiveToMobileSlot();
+    }
+    const ac = document.getElementById('avatar-container');
+    if (ac) {
+      ac.classList.remove('hidden');
+      const poster = ac.querySelector('.avatar-poster');
+      const vid = ac.querySelector('video');
+      if (poster) {
+        if (vid && vid.readyState >= 2) {
+          poster.classList.add('hidden');
+          hideAvatarAudioVisualLayer();
+        } else if (vid) {
+          hideAvatarPosterWhenVideoReady(ac);
+        } else {
+          poster.classList.remove('hidden');
+          showAvatarAudioVisualLayer();
+        }
+      }
+    }
     if (chatManager) { chatManager.enableChat(); chatManager.startNewSession(); }
   }
 
   function onCallStopped() {
     setEndCallLoading(false);
-    document.getElementById('call-btn').classList.remove('hidden');
-    document.getElementById('call-btn').removeAttribute('disabled');
-    document.getElementById('end-call-btn').classList.add('hidden');
+    document.querySelectorAll('.call-ai-main-btn').forEach(b => {
+      b.classList.remove('hidden');
+      b.removeAttribute('disabled');
+    });
+    document.querySelectorAll('.call-ai-end-btn').forEach(b => b.classList.add('hidden'));
     updateAgentStateUI('offline');
-
-    // Remove call panel from detail area
-    const panel = document.getElementById('detail-panel');
-    const callPanel = panel.querySelector('.call-inline-panel');
-    if (callPanel) callPanel.remove();
-    panel.classList.remove('detail-with-call');
-    const tabContent = panel.querySelector('.detail-content-left');
-    if (tabContent) tabContent.classList.remove('detail-content-left');
+    resetCallChromeToIdle();
 
     avatarUID = null;
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
@@ -777,21 +995,23 @@
   }
 
   function setCallButtonLoading(callType, loading) {
-    const btn = document.getElementById('call-btn');
-    loading ? btn.classList.add('loading') : btn.classList.remove('loading');
+    document.querySelectorAll('.call-ai-main-btn').forEach(btn => {
+      loading ? btn.classList.add('loading') : btn.classList.remove('loading');
+    });
   }
 
   function setEndCallLoading(loading) {
-    const btn = document.getElementById('end-call-btn');
-    loading ? btn.classList.add('loading') : btn.classList.remove('loading');
+    document.querySelectorAll('.call-ai-end-btn').forEach(btn => {
+      loading ? btn.classList.add('loading') : btn.classList.remove('loading');
+    });
   }
 
   function updateAgentStateUI(state) {
-    const el = document.getElementById('agent-state');
-    const text = el?.querySelector('.state-text');
-    if (!el || !text) return;
-    text.textContent = state;
-    el.className = 'agent-state state-' + state.toLowerCase();
+    document.querySelectorAll('.call-agent-state').forEach(el => {
+      const text = el.querySelector('.state-text');
+      if (text) text.textContent = state;
+      el.className = 'agent-state call-agent-state state-' + state.toLowerCase();
+    });
   }
 
   function escapeHtml(str) {

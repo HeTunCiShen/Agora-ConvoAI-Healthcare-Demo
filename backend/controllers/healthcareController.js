@@ -37,6 +37,57 @@ function resolveSummaryDoctorId(callType, summary, body) {
   return team[0]?.id || null;
 }
 
+/** If proposed slot is within this window of an existing booking, treat as duplicate (post-call extraction). */
+const APPOINTMENT_DEDUP_MS = 2 * 60 * 60 * 1000;
+
+function resolveDoctorIdFromAppointmentName(doctorName, careTeam) {
+  if (!doctorName || typeof doctorName !== 'string' || !Array.isArray(careTeam)) return null;
+  const n = doctorName.toLowerCase().trim();
+  if (!n) return null;
+  for (const d of careTeam) {
+    if (!d || !d.id || !d.name) continue;
+    const dn = String(d.name).toLowerCase();
+    const short = dn.replace(/^dr\.?\s*/, '').trim();
+    if (dn.includes(n) || n.includes(dn) || (short && (n.includes(short) || short.includes(n)))) {
+      return d.id;
+    }
+  }
+  return null;
+}
+
+/**
+ * Drop appointment_requests that only repeat an already-recorded visit (e.g. patient asking status).
+ */
+function filterSpuriousAppointmentRequests(rawRequests, existingAppointments, careTeam) {
+  if (!Array.isArray(rawRequests) || rawRequests.length === 0) return [];
+  const existing = Array.isArray(existingAppointments) ? existingAppointments : [];
+  const out = [];
+  for (const req of rawRequests) {
+    if (!req || typeof req.doctor_name !== 'string' || !req.doctor_name.trim()) continue;
+    if (!req.date_time || typeof req.date_time !== 'string') continue;
+    const wantTs = Date.parse(req.date_time);
+    if (Number.isNaN(wantTs)) continue;
+    const resolvedId = resolveDoctorIdFromAppointmentName(req.doctor_name, careTeam);
+    if (!resolvedId) {
+      out.push(req);
+      continue;
+    }
+    let clash = false;
+    for (const ex of existing) {
+      if (!ex || !ex.doctor_id || ex.doctor_id !== resolvedId) continue;
+      if (ex.status === 'declined') continue;
+      const exTs = Date.parse(ex.date_time);
+      if (Number.isNaN(exTs)) continue;
+      if (Math.abs(wantTs - exTs) < APPOINTMENT_DEDUP_MS) {
+        clash = true;
+        break;
+      }
+    }
+    if (!clash) out.push(req);
+  }
+  return out;
+}
+
 function parseJsonFields(row, fields) {
   fields.forEach(f => {
     if (row[f]) {
@@ -408,14 +459,22 @@ Rules for related_doctor_id: choose the ONE doctor whose specialty or role best 
 Rules for consultation_kind:
 - general_consulting: broad symptoms, lifestyle, non-specific advice
 - post_op_call: surgical recovery, wound, post-operative instructions
-- appointment_booking: mainly scheduling or confirming visits
+- appointment_booking: the call was mainly about scheduling topics (including questions about visits) — use this even when appointment_requests stays empty
 - condition_followup: chronic disease monitoring (e.g. hypertension) tied to a specialist discussion
 - other: does not fit the above
-If the patient discussed or requested appointments with doctors, add each one to appointment_requests as: {"doctor_name":"full doctor name","date_time":"ISO 8601 datetime","reason":"reason for appointment"}. Multiple appointments in one call are common. Leave as empty array if none.`;
+CRITICAL — appointment_requests (separate from consultation_kind):
+- Only include a NEW booking the patient explicitly asked to create (e.g. "book me…", "I need a new appointment…", "schedule a follow-up I do not have yet").
+- Use appointment_requests: [] when the patient was only asking about an EXISTING visit (time, location, preparation, confirmation, cancellation policy, reminders) or the AI only summarized or confirmed slots that already appear in "Existing appointments" below.
+- Never output an appointment_request that merely repeats a visit the patient already has on file (same doctor and same or overlapping time).
+- Each item must be: {"doctor_name":"full doctor name","date_time":"ISO 8601 datetime","reason":"reason for the NEW request"}. Omit date_time only if impossible (then use [] instead of guessing).`;
 
     const conversationText = transcript
       .map(m => `${m.role === 'assistant' ? 'AI' : speakerLabel}: ${m.content}`)
       .join('\n');
+
+    const existingBlock = Array.isArray(req.body.existing_appointments) && req.body.existing_appointments.length
+      ? `\n\nExisting appointments already on file for this patient (JSON). Do NOT add duplicates of these to appointment_requests; use [] unless the patient clearly requested an additional NEW visit not covered here:\n${JSON.stringify(req.body.existing_appointments)}`
+      : '';
 
     // SUMMARIZE_LLM_* vars override LLM_* — allows a different model/provider
     // just for post-call summarization (e.g. Kimi in China vs OpenAI for conversation)
@@ -437,7 +496,7 @@ If the patient discussed or requested appointments with doctors, add each one to
           model: llmModel,
           messages: [
             { role: 'system', content: systemPrompt },
-            { role: 'user', content: `Transcript:\n${conversationText}` }
+            { role: 'user', content: `Transcript:\n${conversationText}${existingBlock}` }
           ],
           max_tokens: 500,
           temperature: 0.2
@@ -459,9 +518,14 @@ If the patient discussed or requested appointments with doctors, add each one to
       const summary = JSON.parse(jsonStr);
       const doctorId = resolveSummaryDoctorId(call_type, summary, req.body);
       const consultation_kind = normalizeConsultationKind(call_type, summary.consultation_kind);
-      console.log(`[summarize] parsed summary ok, urgency=${summary.urgency}, doctor_id=${doctorId}, kind=${consultation_kind}`);
-      const { related_doctor_id, doctor_id: _dropped, ...rest } = summary;
-      res.json({ ...rest, call_type, doctor_id: doctorId, consultation_kind });
+      const appointment_requests = filterSpuriousAppointmentRequests(
+        summary.appointment_requests,
+        req.body.existing_appointments,
+        req.body.care_team
+      );
+      console.log(`[summarize] parsed summary ok, urgency=${summary.urgency}, doctor_id=${doctorId}, kind=${consultation_kind}, appt_req_out=${appointment_requests.length}`);
+      const { related_doctor_id, doctor_id: _dropped, appointment_requests: _arIn, ...rest } = summary;
+      res.json({ ...rest, call_type, doctor_id: doctorId, consultation_kind, appointment_requests });
     } catch (e) {
       console.error('[summarize] LLM error:', e.response?.data || e.message);
       res.status(500).json({ error: 'Failed to generate summary', details: e.message });

@@ -60,7 +60,19 @@ const mockPatientSummary = {
   transcript_excerpt: 'Patient reported BP of 142/88 and pain level 6.',
   suggested_action: 'Review hypertension management at next appointment',
   related_doctor_id: 'doctor-1',
-  consultation_kind: 'condition_followup'
+  consultation_kind: 'condition_followup',
+  appointment_requests: []
+};
+
+const mockPatientSummaryWithDuplicateAppt = {
+  ...mockPatientSummary,
+  appointment_requests: [
+    {
+      doctor_name: 'Dr. James Williams',
+      date_time: '2026-04-28T10:00:00.000Z',
+      reason: 'Duplicate of existing booking'
+    }
+  ]
 };
 
 const mockDoctorSummary = {
@@ -202,6 +214,38 @@ describe('POST /api/healthcare/summarize — doctor call', () => {
     const userMsg = llmPayload.messages.find(m => m.role === 'user');
     expect(userMsg.content).toContain('Doctor:');
     expect(userMsg.content).not.toContain('Patient:');
+  });
+});
+
+describe('POST /api/healthcare/summarize — appointment_requests dedupe', () => {
+  const app = makeApp();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.LLM_URL = 'https://api.test/v1/chat/completions';
+    process.env.LLM_API_KEY = 'test-key';
+    mockLlmResponse(mockPatientSummaryWithDuplicateAppt);
+  });
+
+  test('strips appointment_requests that overlap existing_appointments', async () => {
+    const res = await request(app).post('/api/healthcare/summarize').send({
+      transcript: patientTranscript,
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3',
+      existing_appointments: [
+        {
+          doctor_id: 'doctor-1',
+          date_time: '2026-04-28T10:00:00.000Z',
+          status: 'confirmed',
+          reason: 'Hypertension follow-up'
+        }
+      ]
+    });
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.appointment_requests)).toBe(true);
+    expect(res.body.appointment_requests).toHaveLength(0);
   });
 });
 
