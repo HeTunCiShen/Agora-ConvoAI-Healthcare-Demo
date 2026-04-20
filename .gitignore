@@ -50,3 +50,4 @@ backend/db/healthcare.db
 
 # Superpowers brainstorm artifacts
 .superpowers/
+.vercel

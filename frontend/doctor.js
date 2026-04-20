@@ -140,6 +140,11 @@
       c.classList.toggle('selected', c.dataset.id === patientId);
     });
     await renderDetailPanel(patientId);
+    // Mobile: show detail, hide list
+    if (window.innerWidth <= 768) {
+      document.getElementById('patient-list').classList.add('detail-open');
+      document.getElementById('detail-panel').classList.add('mobile-open');
+    }
   }
 
   // ===========================
@@ -153,21 +158,26 @@
     const panel = document.getElementById('detail-panel');
 
     panel.innerHTML = `
+      <button class="mobile-back-btn" onclick="document.getElementById('patient-list').classList.remove('detail-open');document.getElementById('detail-panel').classList.remove('mobile-open');">
+        <span class="material-symbols-outlined" style="font-size:18px">arrow_back</span> Back
+      </button>
       <div class="detail-header">
         <div>
           <div class="detail-name">${patient.name}</div>
           <div class="detail-meta">Age ${patient.age || '?'} · ${patient.condition || ''} · ${meds || 'No medications'}</div>
         </div>
-        <button class="btn-request-appt" id="btn-postop-call">📞 Post-Op Check-In Call</button>
+        <button class="btn-request-appt" id="btn-postop-call"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">support_agent</span> Post-Op Check-In Call</button>
       </div>
-      <div class="tab-bar">
-        <button class="tab active" data-tab="profile">Profile</button>
-        <button class="tab" data-tab="calls">Call History</button>
-        <button class="tab" data-tab="appointments">Appointments</button>
+      <div class="detail-content-area">
+        <div class="tab-bar">
+          <button class="tab active" data-tab="profile">Profile</button>
+          <button class="tab" data-tab="calls">Call History</button>
+          <button class="tab" data-tab="appointments">Appointments</button>
+        </div>
+        <div id="tab-profile" class="tab-content active"></div>
+        <div id="tab-calls" class="tab-content"></div>
+        <div id="tab-appointments" class="tab-content"></div>
       </div>
-      <div id="tab-profile" class="tab-content active"></div>
-      <div id="tab-calls" class="tab-content"></div>
-      <div id="tab-appointments" class="tab-content"></div>
     `;
 
     panel.querySelectorAll('.tab-bar .tab').forEach(tab => {
@@ -185,6 +195,54 @@
     renderProfileTab(patient);
     await renderCallHistoryTab(patientId);
     await renderAppointmentsTab(patientId);
+
+    // If a call is active, re-inject the call panel
+    if (agoraConvoAIAgentID && !document.getElementById('end-call-btn').classList.contains('hidden')) {
+      injectCallPanel();
+    }
+  }
+
+  function injectCallPanel() {
+    const panel = document.getElementById('detail-panel');
+    if (panel.querySelector('.call-inline-panel')) return;
+    const tabContent = panel.querySelector('.detail-content-area');
+    if (tabContent) tabContent.classList.add('detail-content-left');
+    const callPanel = document.createElement('div');
+    callPanel.className = 'call-inline-panel';
+    callPanel.innerHTML = `
+      <div class="call-glass-panel">
+        <div class="call-glass-header">
+          <span class="call-glass-label">AI Clinical Assistant</span>
+          <span class="call-status-badge">
+            <span class="call-status-dot"></span>
+            <span class="call-status-text">Speaking</span>
+          </span>
+        </div>
+        <div id="avatar-container" class="avatar-container hidden"></div>
+        <div class="visualizer-container">
+          <div class="wave-bars">
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    panel.appendChild(callPanel);
+    panel.classList.add('detail-with-call');
+
+    // Re-attach avatar video if it was playing
+    const avatarUser = avatarUID ? rtcRemoteUsers[avatarUID] : null;
+    if (avatarUser && avatarUser.videoTrack) {
+      const container = document.getElementById('avatar-container');
+      if (container) {
+        avatarUser.videoTrack.play(container);
+        container.classList.remove('hidden');
+        const vc = panel.querySelector('.visualizer-container');
+        if (vc) vc.classList.add('hidden');
+      }
+    }
   }
 
   // ===========================
@@ -233,7 +291,7 @@
   async function startPostOpCall(patient, phoneNumber) {
     const btn = document.getElementById('btn-postop-call');
     btn.disabled = true;
-    btn.textContent = '⏳ Ringing...';
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">hourglass_top</span> Ringing...';
     sipPatient = patient;
     sipTranscript = [];
 
@@ -277,7 +335,7 @@
     } catch (e) {
       console.error('[sipCall] failed to start:', e);
       btn.disabled = false;
-      btn.textContent = '📞 Post-Op Check-In Call';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">support_agent</span> Post-Op Check-In Call';
       sipAgentId = null;
       sipChannel = null;
       sipPatient = null;
@@ -365,7 +423,7 @@
     document.getElementById('sip-stop-btn').addEventListener('click', stopSipCall);
 
     const btn = document.getElementById('btn-postop-call');
-    btn.textContent = '🔴 Call in Progress';
+    btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;color:#ef4444">circle</span> Call in Progress';
   }
 
   function updateSipLiveTranscript() {
@@ -390,9 +448,9 @@
 
         const btn = document.getElementById('btn-postop-call');
         if (st.status === 'RUNNING' && btn) {
-          btn.textContent = '🔴 Call in Progress';
+          btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;color:#ef4444">circle</span> Call in Progress';
         } else if (st.status === 'STARTING' && btn) {
-          btn.textContent = '⏳ Ringing...';
+          btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">hourglass_top</span> Ringing...';
         }
 
         // Agent stopped — call ended
@@ -447,11 +505,11 @@
     // Update UI
     const btn = document.getElementById('btn-postop-call');
     if (btn) {
-      btn.textContent = '✓ Call completed';
+      btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;color:#10b981">check_circle</span> Call completed';
       btn.disabled = true;
       setTimeout(() => {
         btn.disabled = false;
-        btn.textContent = '📞 Post-Op Check-In Call';
+        btn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">support_agent</span> Post-Op Check-In Call';
       }, 3000);
     }
 
@@ -873,8 +931,8 @@
     document.getElementById('call-btn').classList.remove('loading');
     document.getElementById('call-btn').classList.add('hidden');
     document.getElementById('end-call-btn').classList.remove('hidden');
-    document.getElementById('call-overlay').classList.remove('hidden');
     updateAgentStateUI('speaking');
+    injectCallPanel();
     if (chatManager) { chatManager.enableChat(); chatManager.startNewSession(); chatManager.openChat(); }
   }
 
@@ -883,12 +941,16 @@
     document.getElementById('call-btn').classList.remove('hidden');
     document.getElementById('call-btn').removeAttribute('disabled');
     document.getElementById('end-call-btn').classList.add('hidden');
-    document.getElementById('call-overlay').classList.add('hidden');
     updateAgentStateUI('offline');
-    const avatarContainer = document.getElementById('avatar-container');
-    if (avatarContainer) avatarContainer.classList.add('hidden');
-    const vc = document.querySelector('.visualizer-container');
-    if (vc) vc.classList.remove('hidden');
+
+    // Remove call panel from detail area
+    const panel = document.getElementById('detail-panel');
+    const callPanel = panel.querySelector('.call-inline-panel');
+    if (callPanel) callPanel.remove();
+    panel.classList.remove('detail-with-call');
+    const tabContent = panel.querySelector('.detail-content-left');
+    if (tabContent) tabContent.classList.remove('detail-content-left');
+
     avatarUID = null;
     if (chatManager) { chatManager.disableChat(); chatManager.endSession(); }
   }

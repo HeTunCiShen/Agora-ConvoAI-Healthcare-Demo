@@ -4,7 +4,10 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>HealthAI — Doctor</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/shared/theme.css" />
   <script src="/lib/agora-rtc-sdk-ng/AgoraRTC_N-production.js"></script>
   <script src="/lib/agora-rtm/agora-rtm.js"></script>
@@ -17,50 +20,47 @@
       <h1>HealthAI</h1>
       <p class="subtitle">Doctor — select your profile</p>
       <div class="profile-cards" id="doctor-cards">
-        <p style="color:#9ca3af">Loading profiles…</p>
+        <p style="color:var(--on-surface-variant)">Loading profiles…</p>
       </div>
     </div>
   </div>
 
   <!-- Main doctor page -->
   <div id="main-page" class="hidden">
-    <div class="page-header">
-      <div class="logo">HealthAI</div>
-      <button id="switch-user-btn" class="switch-user-btn">Switch Doctor</button>
-    </div>
+    <!-- Header -->
+    <nav class="page-nav">
+      <div class="page-nav-left">
+        <span class="page-nav-brand">HealthAI</span>
+      </div>
+      <div class="page-nav-right">
+        <button id="switch-user-btn" class="switch-user-btn">
+          <span class="material-symbols-outlined" style="font-size:16px">swap_horiz</span>
+          Switch Doctor
+        </button>
+      </div>
+    </nav>
 
-    <!-- Top bar: profile + AI call controls -->
+    <!-- Top bar: profile only -->
     <div class="top-bar">
       <div class="profile-section" id="top-bar-profile"></div>
-      <div class="call-controls">
-        <section id="agent-state" class="agent-state state-offline" style="margin:0;padding:4px 8px;">
-          <div class="state-indicator">
-            <span class="state-dot"></span>
-            <span class="state-text">offline</span>
-          </div>
-        </section>
-        <button id="call-btn" class="btn primary" style="padding:6px 14px;font-size:12px;">
-          <span class="btn-text">📞 Call AI Assistant</span>
-          <span class="btn-loading" style="display:none">Connecting…</span>
-        </button>
-        <button id="end-call-btn" class="btn danger hidden" style="padding:6px 14px;font-size:12px;">
-          <span class="btn-text">End Call</span>
-          <span class="btn-loading" style="display:none">Ending…</span>
-        </button>
-      </div>
     </div>
 
-    <!-- Call overlay: avatar + visualizer (shown during call) -->
-    <div id="call-overlay" class="call-overlay hidden">
-      <div id="avatar-container" class="avatar-container hidden"></div>
-      <div class="visualizer-container">
-        <div class="wave-bars">
-          <div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div>
-          <div class="wave-bar"></div><div class="wave-bar"></div>
+    <!-- Fixed call controls: bottom-left (button on top, status below) -->
+    <div class="call-controls-fixed">
+      <button id="call-btn" class="btn primary">
+        <span class="btn-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">phone_in_talk</span> Call AI Assistant</span>
+        <span class="btn-loading" style="display:none">Connecting…</span>
+      </button>
+      <button id="end-call-btn" class="btn danger hidden">
+        <span class="btn-text"><span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">call_end</span> End Call</span>
+        <span class="btn-loading" style="display:none">Ending…</span>
+      </button>
+      <section id="agent-state" class="agent-state state-offline">
+        <div class="state-indicator">
+          <span class="state-dot"></span>
+          <span class="state-text">offline</span>
         </div>
-      </div>
+      </section>
     </div>
 
     <!-- Master-detail layout -->
@@ -76,10 +76,10 @@
 
   <!-- Chat panel -->
   <div id="chatToggle" class="chat-toggle" style="display:none">
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M8 12h8M8 8h8M8 16h5M7 20l4-4h6a3 3 0 003-3V7a3 3 0 00-3-3H7a3 3 0 00-3 3v10a3 3 0 003 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span class="material-symbols-outlined">chat</span>
   </div>
   <div id="chatPanel" class="chat-panel">
-    <div class="chat-header"><h3>Chat with AI</h3><button id="closeChatBtn" class="close-btn">×</button></div>
+    <div class="chat-header"><h3>Chat with AI</h3><button id="closeChatBtn" class="close-btn">&times;</button></div>
     <div class="chat-messages" id="chatMessages"></div>
     <div id="typingIndicator" class="typing-indicator" style="display:none">
       <div class="typing-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
@@ -88,7 +88,7 @@
     <div class="chat-input">
       <input type="text" id="messageInput" placeholder="Start the conversation to begin chatting…" disabled />
       <button id="sendBtn" class="send-btn" disabled>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="material-symbols-outlined" style="font-size:18px">send</span>
       </button>
     </div>
     <div class="chat-actions"><button id="clearChatBtn" class="clear-btn">Clear Chat</button></div>

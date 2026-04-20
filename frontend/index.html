@@ -3,26 +3,59 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>HealthAI Demo</title>
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="shared/theme.css" />
+  <title>HealthAI — Voice Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/shared/theme.css" />
 </head>
-<body style="min-height:100vh;display:flex;align-items:center;justify-content:center">
-  <div style="text-align:center;padding:40px">
-    <h1 style="color:#0d9488;font-size:36px;font-weight:700;margin-bottom:8px">HealthAI</h1>
-    <p style="color:#6b7280;font-size:16px;margin-bottom:40px">AI-powered healthcare assistant demo</p>
-    <div style="display:flex;gap:20px;justify-content:center">
-      <a href="/patient" style="display:block;background:white;border:2px solid #99f6e4;border-radius:16px;padding:32px 40px;text-decoration:none;box-shadow:0 4px 16px rgba(13,148,136,0.08);transition:all 0.2s" onmouseover="this.style.borderColor='#0d9488';this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='#99f6e4';this.style.transform='none'">
-        <div style="font-size:40px;margin-bottom:12px">👤</div>
-        <div style="font-weight:700;font-size:16px;color:#1f2937;margin-bottom:4px">Patient</div>
-        <div style="font-size:13px;color:#6b7280">Call AI assistant, check-in</div>
+<body class="landing-body">
+  <!-- Ambient background glow -->
+  <div class="ambient-glow ambient-glow--top"></div>
+  <div class="ambient-glow ambient-glow--bottom"></div>
+
+  <main class="landing-main">
+    <header class="landing-header">
+      <h1 class="landing-brand">HealthAI</h1>
+      <p class="landing-subtitle">A Living Sanctuary for Healthcare AI</p>
+    </header>
+
+    <div class="landing-cards">
+      <a href="/patient" class="landing-card">
+        <div class="landing-card-icon">
+          <span class="material-symbols-outlined">record_voice_over</span>
+        </div>
+        <h2 class="landing-card-title">I'm a Patient</h2>
+        <p class="landing-card-desc">Call your AI assistant for a seamless check-in, triage, and guidance before your visit.</p>
+        <div class="landing-card-cta">
+          <span>Start Voice Session</span>
+          <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span>
+        </div>
       </a>
-      <a href="/doctor" style="display:block;background:white;border:2px solid #99f6e4;border-radius:16px;padding:32px 40px;text-decoration:none;box-shadow:0 4px 16px rgba(13,148,136,0.08);transition:all 0.2s" onmouseover="this.style.borderColor='#0d9488';this.style.transform='translateY(-3px)'" onmouseout="this.style.borderColor='#99f6e4';this.style.transform='none'">
-        <div style="font-size:40px;margin-bottom:12px">🩺</div>
-        <div style="font-weight:700;font-size:16px;color:#1f2937;margin-bottom:4px">Doctor</div>
-        <div style="font-size:13px;color:#6b7280">View summaries, consult AI</div>
+
+      <a href="/doctor" class="landing-card">
+        <div class="landing-card-icon">
+          <span class="material-symbols-outlined">analytics</span>
+        </div>
+        <h2 class="landing-card-title">I'm a Doctor</h2>
+        <p class="landing-card-desc">View intelligent session summaries, review transcripts, and consult the AI securely.</p>
+        <div class="landing-card-cta">
+          <span>Access Dashboard</span>
+          <span class="material-symbols-outlined" style="font-size:16px">arrow_forward</span>
+        </div>
       </a>
     </div>
-  </div>
+  </main>
+
+  <footer class="landing-footer">
+    <div class="landing-footer-powered">
+      <span class="landing-footer-label">Powered by</span>
+      <a href="https://www.agora.io/" target="_blank" rel="noopener noreferrer" class="landing-footer-agora">
+        <img src="https://cdn.prod.website-files.com/660affa848e8af81bdd03909/66ab7f671fb90c022fb7f1dc_Agora%20Logo%20Crisp.webp" loading="lazy" width="85" height="37" alt="Agora logo" srcset="https://cdn.prod.website-files.com/660affa848e8af81bdd03909/66ab7f671fb90c022fb7f1dc_Agora%20Logo%20Crisp-p-500.png 500w, https://cdn.prod.website-files.com/660affa848e8af81bdd03909/66ab7f671fb90c022fb7f1dc_Agora%20Logo%20Crisp.webp 800w" sizes="85px" />
+      </a>
+    </div>
+    <p class="landing-footer-text">&copy; 2026 HealthAI Demo. Built with <a href="https://www.agora.io/en/products/conversational-ai/" target="_blank" rel="noopener noreferrer" class="landing-footer-link">Agora Conversational AI</a></p>
+  </footer>
 </body>
 </html>
