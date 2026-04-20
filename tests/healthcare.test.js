@@ -78,12 +78,27 @@ describe('POST /api/healthcare/summaries', () => {
       ai_recommendation: 'Monitor BP',
       urgency: 'low',
       transcript_excerpt: 'Patient reported headache for 3 days.',
-      suggested_action: 'Review at next appointment'
+      suggested_action: 'Review at next appointment',
+      doctor_id: 'doctor-1',
+      consultation_kind: 'general_consulting'
     });
     expect(res.status).toBe(201);
     expect(res.body.patient_id).toBe('patient-1');
     expect(res.body.call_type).toBe('pre-session');
     expect(Array.isArray(res.body.symptoms)).toBe(true);
+    expect(res.body.doctor_id).toBe('doctor-1');
+    expect(res.body.consultation_kind).toBe('general_consulting');
+    expect(res.body.doctor_name).toBe('Dr. James Williams');
+  });
+
+  test('returns 400 when doctor_id is not a doctor profile', async () => {
+    const res = await request(app).post('/api/healthcare/summaries').send({
+      patient_id: 'patient-1',
+      call_type: 'patient',
+      doctor_id: 'patient-2'
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/doctor/);
   });
 
   test('returns 400 when patient_id missing', async () => {
@@ -100,10 +115,26 @@ describe('POST /api/healthcare/summaries', () => {
 describe('GET /api/healthcare/summaries', () => {
   const app = makeApp();
 
-  test('returns empty array when no summaries', async () => {
+  test('returns array including seeded demo summaries', async () => {
     const res = await request(app).get('/api/healthcare/summaries');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(4);
+  });
+
+  test('filters summaries by patient_id and doctor_id', async () => {
+    const res = await request(app).get('/api/healthcare/summaries?patient_id=patient-1&doctor_id=doctor-1');
+    expect(res.status).toBe(200);
+    expect(res.body.every((s) => s.patient_id === 'patient-1' && s.doctor_id === 'doctor-1')).toBe(true);
+    expect(res.body.map((s) => s.id)).toContain('seed-call-p1-1');
+    expect(res.body.map((s) => s.id)).not.toContain('seed-call-p1-2');
+  });
+
+  test('filters summaries by doctor_id only', async () => {
+    const res = await request(app).get('/api/healthcare/summaries?doctor_id=doctor-2');
+    expect(res.status).toBe(200);
+    expect(res.body.every((s) => s.doctor_id === 'doctor-2')).toBe(true);
+    expect(res.body.length).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -167,11 +198,17 @@ describe('POST /api/healthcare/appointments', () => {
 });
 
 describe('GET /api/healthcare/appointments', () => {
-  test('returns empty array when no appointments', async () => {
+  test('returns seeded demo appointments when listing all', async () => {
     const app = makeApp();
     const res = await request(app).get('/api/healthcare/appointments');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
+    expect(res.body).toHaveLength(4);
+    expect(res.body.map((a) => a.id).sort()).toEqual([
+      'seed-appt-p1-1',
+      'seed-appt-p1-2',
+      'seed-appt-p2-1',
+      'seed-appt-p2-2'
+    ].sort());
   });
 
   test('filters by patient_id', async () => {
@@ -187,8 +224,8 @@ describe('GET /api/healthcare/appointments', () => {
 
     const res = await request(app).get('/api/healthcare/appointments?patient_id=patient-1');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0].patient_id).toBe('patient-1');
+    expect(res.body).toHaveLength(3);
+    expect(res.body.every((a) => a.patient_id === 'patient-1')).toBe(true);
   });
 
   test('filters by doctor_id', async () => {
@@ -204,8 +241,8 @@ describe('GET /api/healthcare/appointments', () => {
 
     const res = await request(app).get('/api/healthcare/appointments?doctor_id=doctor-2');
     expect(res.status).toBe(200);
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0].doctor_id).toBe('doctor-2');
+    expect(res.body).toHaveLength(3);
+    expect(res.body.every((a) => a.doctor_id === 'doctor-2')).toBe(true);
   });
 
   test('includes patient_name and doctor_name via JOIN', async () => {

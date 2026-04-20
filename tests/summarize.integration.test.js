@@ -39,6 +39,13 @@ const doctorTranscript = [
   { role: 'assistant', content: 'No significant interaction between lisinopril and metformin. Monitor eGFR — ACE inhibitors can affect renal function.' }
 ];
 
+const integrationCareTeam = [
+  { id: 'doctor-1', name: 'Dr. James Williams', specialty: 'Cardiologist' },
+  { id: 'doctor-2', name: 'Dr. Priya Patel', specialty: 'Orthopaedic Surgeon' },
+  { id: 'doctor-3', name: 'Dr. Emily Nguyen', specialty: 'General Practitioner' },
+  { id: 'doctor-4', name: 'Dr. Amir Hassan', specialty: 'Neurologist' }
+];
+
 describe('LLM connectivity check', () => {
   test('summarize LLM is configured in .env', () => {
     const url = process.env.SUMMARIZE_LLM_URL || process.env.LLM_URL;
@@ -59,7 +66,9 @@ describe('Real LLM — patient transcript', () => {
     console.log('\n--- Sending patient transcript to LLM ---');
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: integrationCareTeam,
+      default_doctor_id: 'doctor-3'
     });
 
     console.log('HTTP status:', res.status);
@@ -72,6 +81,8 @@ describe('Real LLM — patient transcript', () => {
     expect(Array.isArray(res.body.symptoms)).toBe(true);
     expect(['low', 'medium', 'high']).toContain(res.body.urgency);
     expect(typeof res.body.ai_recommendation).toBe('string');
+    expect(typeof res.body.doctor_id).toBe('string');
+    expect(res.body.doctor_id.length).toBeGreaterThan(0);
   }, 30000);
 });
 
@@ -82,7 +93,8 @@ describe('Real LLM — doctor transcript', () => {
     console.log('\n--- Sending doctor transcript to LLM ---');
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: doctorTranscript,
-      call_type: 'doctor-query'
+      call_type: 'doctor-query',
+      acting_doctor_id: 'doctor-1'
     });
 
     console.log('HTTP status:', res.status);
@@ -93,6 +105,7 @@ describe('Real LLM — doctor transcript', () => {
     expect(typeof res.body.chief_complaint).toBe('string');
     expect(res.body.chief_complaint.length).toBeGreaterThan(0);
     expect(typeof res.body.ai_recommendation).toBe('string');
+    expect(res.body.doctor_id).toBe('doctor-1');
   }, 30000);
 });
 
@@ -105,7 +118,9 @@ describe('Real LLM — full flow: summarize → save → retrieve', () => {
     // Step 1: summarize
     const summarizeRes = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: integrationCareTeam,
+      default_doctor_id: 'doctor-3'
     });
     console.log('Summarize status:', summarizeRes.status);
     expect(summarizeRes.status).toBe(200);

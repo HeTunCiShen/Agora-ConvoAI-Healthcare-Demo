@@ -38,7 +38,9 @@ function createDb(dbPath) {
       suggested_action TEXT,
       transcript TEXT,
       media_attachment_ids TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      doctor_id TEXT,
+      consultation_kind TEXT
     );
 
     CREATE TABLE IF NOT EXISTS media_attachments (
@@ -87,7 +89,21 @@ function createDb(dbPath) {
     );
   `);
 
+  migrateCallSummaries(db);
+
   return db;
+}
+
+/** Add columns introduced after first deploy (SQLite has no IF NOT EXISTS for columns). */
+function migrateCallSummaries(db) {
+  const cols = db.prepare('PRAGMA table_info(call_summaries)').all();
+  const names = new Set(cols.map((c) => c.name));
+  if (!names.has('doctor_id')) {
+    db.exec('ALTER TABLE call_summaries ADD COLUMN doctor_id TEXT');
+  }
+  if (!names.has('consultation_kind')) {
+    db.exec('ALTER TABLE call_summaries ADD COLUMN consultation_kind TEXT');
+  }
 }
 
 module.exports = { createDb };

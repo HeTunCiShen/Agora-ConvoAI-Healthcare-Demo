@@ -530,7 +530,11 @@
       }));
       console.log('[sipCall] summarizing %d messages for %s', messages.length, patient.id);
       try {
-        const summary = await API.healthcare.summarize({ transcript: messages, call_type: 'post-op' });
+        const summary = await API.healthcare.summarize({
+          transcript: messages,
+          call_type: 'post-op',
+          acting_doctor_id: selectedProfile.id
+        });
         await API.healthcare.createSummary({ patient_id: patient.id, ...summary, transcript: messages });
         console.log('[sipCall] summary saved');
       } catch (e) {
@@ -563,24 +567,33 @@
   async function renderCallHistoryTab(patientId) {
     const container = document.getElementById('tab-calls');
     try {
-      const summaries = await API.healthcare.listSummaries(patientId);
+      const summaries = await API.healthcare.listSummaries({
+        patient_id: patientId,
+        doctor_id: selectedProfile.id
+      });
       if (summaries.length === 0) {
-        container.innerHTML = '<p class="empty-state">No call history for this patient.</p>';
+        container.innerHTML = '<p class="empty-state">No call history for this patient under your profile.</p>';
         return;
       }
       container.innerHTML = summaries.map(s => {
         const symptoms = Array.isArray(s.symptoms) ? s.symptoms.join(', ') : '';
         const meds = Array.isArray(s.medications_discussed) ? s.medications_discussed.join(', ') : '';
         const timeStr = s.created_at ? new Date(s.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        const kind = s.consultation_kind || '';
+        const kindSlug = kind ? kind.replace(/_/g, '-') : 'other';
+        const kindLabel = UTILS.consultationKindLabel(kind, s.call_type);
+        const withDoctor = s.doctor_name ? `With ${escapeHtml(s.doctor_name)}` : 'Care team (not specified)';
         return `
           <div class="summary-card">
             <div class="summary-card-header">
               <span class="summary-card-patient">${timeStr}</span>
               <div class="summary-card-badges">
+                <span class="badge badge-consult-${kindSlug}" title="Consultation type">${escapeHtml(kindLabel)}</span>
                 <span class="badge badge-${s.call_type}">${s.call_type}</span>
                 <span class="badge badge-${s.urgency}">${s.urgency}</span>
               </div>
             </div>
+            <div class="summary-field summary-with-doctor"><span class="label">Doctor: </span><span class="value">${withDoctor}</span></div>
             ${s.chief_complaint ? `<div class="summary-field"><span class="label">Chief complaint: </span><span class="value">${escapeHtml(s.chief_complaint)}</span></div>` : ''}
             ${symptoms ? `<div class="summary-field"><span class="label">Symptoms: </span><span class="value">${escapeHtml(symptoms)}</span></div>` : ''}
             ${meds ? `<div class="summary-field"><span class="label">Medications: </span><span class="value">${escapeHtml(meds)}</span></div>` : ''}
@@ -618,10 +631,14 @@
             <button class="btn-confirm" onclick="handleAppointment('${a.id}','confirmed')">Confirm</button>
             <button class="btn-decline" onclick="handleAppointment('${a.id}','declined')">Decline</button>
           </div>` : '';
+        const withLine = a.doctor_name
+          ? `<div class="appt-with-doctor"><span class="label">With: </span>${escapeHtml(a.doctor_name)}</div>`
+          : '';
         return `
           <div class="appt-card${a.status === 'requested' ? ' pending' : ''}">
             <div class="appt-status status-${a.status}">${statusLabel}</div>
-            <div class="appt-datetime">${dt} — ${a.doctor_name || a.doctor_id}</div>
+            <div class="appt-datetime">${dt}</div>
+            ${withLine}
             ${a.reason ? `<div class="appt-reason">Reason: ${escapeHtml(a.reason)}</div>` : ''}
             ${actions}
           </div>
@@ -734,7 +751,7 @@
 
       // Include consolidated profile summaries for recent patients
       try {
-        const summaries = await API.healthcare.listSummaries();
+        const summaries = await API.healthcare.listSummaries({ doctor_id: selectedProfile.id });
         const seen = new Set();
         const patientIds = summaries.filter(s => {
           if (seen.has(s.patient_id)) return false;
@@ -822,7 +839,11 @@
     }
 
     if (transcript.length > 0 && profile) {
-      API.healthcare.summarize({ transcript, call_type: 'doctor-query' })
+      API.healthcare.summarize({
+        transcript,
+        call_type: 'doctor-query',
+        acting_doctor_id: profile.id
+      })
         .then(summary => API.healthcare.createSummary({ patient_id: profile.id, ...summary, transcript }))
         .then(() => console.log('[stopCall] doctor summary saved'))
         .catch(e => console.error('[stopCall] failed to save doctor summary:', e));

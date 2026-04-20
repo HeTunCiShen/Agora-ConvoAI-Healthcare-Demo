@@ -722,6 +722,23 @@ body {
 .badge-doctor-query { background: #ede9fe; color: #5b21b6; }
 .badge-patient { background: #e0faf5; color: #065f46; }
 
+/* Consultation kind (LLM-scoped) — sentence case */
+.summary-card-badges .badge[class^="badge-consult-"],
+.summary-card-badges .badge[class*=" badge-consult-"] {
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.badge-consult-general-consulting { background: #ecfeff; color: #0e7490; }
+.badge-consult-post-op-call { background: #fff7ed; color: #c2410c; }
+.badge-consult-appointment-booking { background: #f5f3ff; color: #5b21b6; }
+.badge-consult-condition-followup { background: #fef9c3; color: #a16207; }
+.badge-consult-doctor-assistant { background: #ede9fe; color: #5b21b6; }
+.badge-consult-other { background: var(--surface-container-high); color: var(--on-surface-variant); }
+
+.summary-with-doctor { margin-bottom: 8px; }
+.appt-with-doctor { font-size: 13px; color: var(--on-surface); margin-top: 4px; }
+.appt-with-doctor .label { font-weight: 600; color: var(--on-surface-variant); margin-right: 4px; }
+
 /* ===========================
    SUMMARY CARDS
    =========================== */

@@ -33,4 +33,26 @@ describe('seed data', () => {
     const rows = db.prepare('SELECT * FROM profiles').all();
     expect(rows).toHaveLength(6);
   });
+
+  test('seeds 4 demo call summaries (2 per patient)', () => {
+    const rows = db.prepare('SELECT * FROM call_summaries ORDER BY patient_id, created_at').all();
+    expect(rows).toHaveLength(4);
+    const p1 = rows.filter((r) => r.patient_id === 'patient-1');
+    const p2 = rows.filter((r) => r.patient_id === 'patient-2');
+    expect(p1).toHaveLength(2);
+    expect(p2).toHaveLength(2);
+  });
+
+  test('seeds 4 demo appointments (2 per patient)', () => {
+    const rows = db.prepare('SELECT * FROM appointments ORDER BY patient_id, date_time').all();
+    expect(rows).toHaveLength(4);
+    expect(rows.filter((r) => r.patient_id === 'patient-1')).toHaveLength(2);
+    expect(rows.filter((r) => r.patient_id === 'patient-2')).toHaveLength(2);
+  });
+
+  test('seed is idempotent — mock calls and appointments do not duplicate', () => {
+    seed(db);
+    expect(db.prepare('SELECT COUNT(*) AS c FROM call_summaries').get().c).toBe(4);
+    expect(db.prepare('SELECT COUNT(*) AS c FROM appointments').get().c).toBe(4);
+  });
 });

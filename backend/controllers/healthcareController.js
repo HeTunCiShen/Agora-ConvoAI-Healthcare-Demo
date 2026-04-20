@@ -2,6 +2,41 @@
 const { randomUUID } = require('crypto');
 const axios = require('axios');
 
+const CONSULTATION_KINDS = new Set([
+  'general_consulting',
+  'post_op_call',
+  'appointment_booking',
+  'condition_followup',
+  'doctor_assistant',
+  'other'
+]);
+
+function normalizeConsultationKind(callType, raw) {
+  const k = typeof raw === 'string' ? raw.trim() : '';
+  if (CONSULTATION_KINDS.has(k)) return k;
+  if (callType === 'post-op') return 'post_op_call';
+  if (callType === 'doctor-query') return 'doctor_assistant';
+  return 'general_consulting';
+}
+
+/** Pick which care-team doctor owns this summary for UI isolation. */
+function resolveSummaryDoctorId(callType, summary, body) {
+  const acting = body.acting_doctor_id;
+  if ((callType === 'post-op' || callType === 'doctor-query') && acting) {
+    return acting;
+  }
+  const team = Array.isArray(body.care_team) ? body.care_team : [];
+  const ids = new Set(team.map((t) => t.id).filter(Boolean));
+  let rid = summary.related_doctor_id || summary.doctor_id || '';
+  if (typeof rid !== 'string') rid = '';
+  rid = rid.trim();
+  if (rid && ids.has(rid)) return rid;
+  const fallback = typeof body.default_doctor_id === 'string' ? body.default_doctor_id.trim() : '';
+  if (fallback && ids.has(fallback)) return fallback;
+  if (fallback) return fallback;
+  return team[0]?.id || null;
+}
+
 function parseJsonFields(row, fields) {
   fields.forEach(f => {
     if (row[f]) {
@@ -29,21 +64,46 @@ function makeHealthcareController(db, sse) {
   }
 
   function listSummaries(req, res) {
-    const { patient_id } = req.query;
-    const rows = patient_id
-      ? db.prepare(`
-          SELECT cs.*, p.name AS patient_name
+    const { patient_id, doctor_id } = req.query;
+    const hasPatient = Boolean(patient_id);
+    const hasDoctor = Boolean(doctor_id);
+    let rows;
+    if (hasPatient && hasDoctor) {
+      rows = db.prepare(`
+          SELECT cs.*, p.name AS patient_name, d.name AS doctor_name
           FROM call_summaries cs
           LEFT JOIN profiles p ON cs.patient_id = p.id
+          LEFT JOIN profiles d ON cs.doctor_id = d.id
+          WHERE cs.patient_id = ? AND cs.doctor_id = ?
+          ORDER BY cs.created_at DESC
+        `).all(patient_id, doctor_id);
+    } else if (hasPatient) {
+      rows = db.prepare(`
+          SELECT cs.*, p.name AS patient_name, d.name AS doctor_name
+          FROM call_summaries cs
+          LEFT JOIN profiles p ON cs.patient_id = p.id
+          LEFT JOIN profiles d ON cs.doctor_id = d.id
           WHERE cs.patient_id = ?
           ORDER BY cs.created_at DESC
-        `).all(patient_id)
-      : db.prepare(`
-          SELECT cs.*, p.name AS patient_name
+        `).all(patient_id);
+    } else if (hasDoctor) {
+      rows = db.prepare(`
+          SELECT cs.*, p.name AS patient_name, d.name AS doctor_name
           FROM call_summaries cs
           LEFT JOIN profiles p ON cs.patient_id = p.id
+          LEFT JOIN profiles d ON cs.doctor_id = d.id
+          WHERE cs.doctor_id = ?
+          ORDER BY cs.created_at DESC
+        `).all(doctor_id);
+    } else {
+      rows = db.prepare(`
+          SELECT cs.*, p.name AS patient_name, d.name AS doctor_name
+          FROM call_summaries cs
+          LEFT JOIN profiles p ON cs.patient_id = p.id
+          LEFT JOIN profiles d ON cs.doctor_id = d.id
           ORDER BY cs.created_at DESC
         `).all();
+    }
     rows.forEach(r => parseJsonFields(r, ['symptoms', 'vitals_mentioned', 'medications_discussed', 'transcript']));
     res.json(rows);
   }
@@ -51,12 +111,22 @@ function makeHealthcareController(db, sse) {
   function createSummary(req, res) {
     const {
       patient_id, call_type, chief_complaint, symptoms, vitals_mentioned,
-      medications_discussed, ai_recommendation, urgency, transcript_excerpt, suggested_action, transcript
+      medications_discussed, ai_recommendation, urgency, transcript_excerpt, suggested_action, transcript,
+      doctor_id, consultation_kind
     } = req.body;
 
     if (!patient_id || !call_type) {
       return res.status(400).json({ error: 'patient_id and call_type are required' });
     }
+
+    let docId = typeof doctor_id === 'string' ? doctor_id.trim() : '';
+    if (docId) {
+      const doc = db.prepare('SELECT id FROM profiles WHERE id = ? AND role = ?').get(docId, 'doctor');
+      if (!doc) return res.status(400).json({ error: 'doctor_id must reference a doctor profile' });
+    } else {
+      docId = null;
+    }
+    const kind = normalizeConsultationKind(call_type, consultation_kind);
 
     const id = randomUUID();
     const now = new Date().toISOString();
@@ -64,8 +134,9 @@ function makeHealthcareController(db, sse) {
     db.prepare(`
       INSERT INTO call_summaries
       (id, patient_id, call_type, chief_complaint, symptoms, vitals_mentioned,
-       medications_discussed, ai_recommendation, urgency, transcript_excerpt, suggested_action, transcript, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       medications_discussed, ai_recommendation, urgency, transcript_excerpt, suggested_action, transcript, created_at,
+       doctor_id, consultation_kind)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, patient_id, call_type, chief_complaint || '',
       JSON.stringify(symptoms || []),
@@ -73,10 +144,16 @@ function makeHealthcareController(db, sse) {
       JSON.stringify(medications_discussed || []),
       ai_recommendation || '', urgency || 'low',
       transcript_excerpt || '', suggested_action || '',
-      JSON.stringify(transcript || []), now
+      JSON.stringify(transcript || []), now,
+      docId, kind
     );
 
-    const summary = db.prepare('SELECT * FROM call_summaries WHERE id = ?').get(id);
+    const summary = db.prepare(`
+      SELECT cs.*, d.name AS doctor_name
+      FROM call_summaries cs
+      LEFT JOIN profiles d ON cs.doctor_id = d.id
+      WHERE cs.id = ?
+    `).get(id);
     parseJsonFields(summary, ['symptoms', 'vitals_mentioned', 'medications_discussed', 'transcript']);
 
     const patient = db.prepare('SELECT name FROM profiles WHERE id = ?').get(patient_id);
@@ -294,7 +371,7 @@ Return ONLY the summary text, no JSON, no markdown, no headers.`;
   }
 
   async function generateSummary(req, res) {
-    const { transcript, call_type } = req.body;
+    const { transcript, call_type, care_team, acting_doctor_id, default_doctor_id } = req.body;
 
     if (!transcript || !Array.isArray(transcript) || transcript.length === 0) {
       return res.status(400).json({ error: 'transcript array is required' });
@@ -308,12 +385,33 @@ Return ONLY the summary text, no JSON, no markdown, no headers.`;
     const isDoctor = call_type === 'doctor-query';
     const speakerLabel = isDoctor ? 'Doctor' : 'Patient';
 
+    const teamLines = (Array.isArray(care_team) ? care_team : [])
+      .filter((m) => m && m.id)
+      .map((m) => `- ${m.id} — ${m.name || 'Doctor'}${m.specialty ? ` (${m.specialty})` : ''}`)
+      .join('\n');
+    const teamBlock = teamLines
+      ? `\nCare team (you MUST set related_doctor_id to exactly one of these ids, or null only if instructed below):\n${teamLines}\n`
+      : '\nNo care team list was provided; set related_doctor_id to null.\n';
+
+    const defaultLine = default_doctor_id
+      ? `If the conversation is general triage, scheduling, or no specific specialist is clearly responsible, set related_doctor_id to "${default_doctor_id}" (primary care / coordinator).\n`
+      : 'If no specific physician applies, pick the most clinically appropriate doctor from the list.\n';
+
     const systemPrompt = isDoctor
       ? `You are a clinical documentation assistant. Given a conversation transcript between a doctor and an AI clinical assistant, return ONLY a valid JSON object (no markdown, no explanation) with these exact fields:
-{"call_type":"doctor-query","chief_complaint":"clinical topic or question discussed","ai_recommendation":"key answer or recommendation given","transcript_excerpt":"most important 1-2 sentence exchange","suggested_action":"follow-up action if any, otherwise empty string","urgency":"low","related_doctor_name":""}`
+{"chief_complaint":"clinical topic or question discussed","ai_recommendation":"key answer or recommendation given","transcript_excerpt":"most important 1-2 sentence exchange","suggested_action":"follow-up action if any, otherwise empty string","urgency":"low","consultation_kind":"doctor_assistant"}
+consultation_kind must be "doctor_assistant" for this call type.`
       : `You are a clinical documentation assistant. Given a conversation transcript between a patient and an AI medical assistant, return ONLY a valid JSON object (no markdown, no explanation) with these exact fields:
-{"call_type":"pre-session|condition-check|post-session|post-op","chief_complaint":"main reason for the call","symptoms":[],"vitals_mentioned":{},"medications_discussed":[],"ai_recommendation":"what the AI recommended","urgency":"low|medium|high","transcript_excerpt":"most important 1-2 sentence exchange","suggested_action":"what the doctor should do","related_doctor_name":"name of the specific doctor discussed or empty string if none","appointment_requests":[]}
-If the patient discussed or requested appointments with doctors, add each one to appointment_requests as: {"doctor_name":"full doctor name","date_time":"ISO 8601 datetime","reason":"reason for appointment"}. Multiple appointments in one call are common. Leave as empty array if no appointments discussed.`;
+{"chief_complaint":"main reason for the call","symptoms":[],"vitals_mentioned":{},"medications_discussed":[],"ai_recommendation":"what the AI recommended","urgency":"low|medium|high","transcript_excerpt":"most important 1-2 sentence exchange","suggested_action":"what the clinician should do next","related_doctor_id":"one care-team id string or null","consultation_kind":"one of general_consulting|post_op_call|appointment_booking|condition_followup|other","appointment_requests":[]}
+${teamBlock}${defaultLine}
+Rules for related_doctor_id: choose the ONE doctor whose specialty or role best matches the main clinical topic (e.g. knee surgery follow-up → orthopaedic surgeon id). For booking/scheduling-only topics with a named doctor, use that doctor's id. Use null only if the transcript never implies any specific clinician and no team id clearly fits — in that case prefer the default_doctor_id from the instructions above when provided.
+Rules for consultation_kind:
+- general_consulting: broad symptoms, lifestyle, non-specific advice
+- post_op_call: surgical recovery, wound, post-operative instructions
+- appointment_booking: mainly scheduling or confirming visits
+- condition_followup: chronic disease monitoring (e.g. hypertension) tied to a specialist discussion
+- other: does not fit the above
+If the patient discussed or requested appointments with doctors, add each one to appointment_requests as: {"doctor_name":"full doctor name","date_time":"ISO 8601 datetime","reason":"reason for appointment"}. Multiple appointments in one call are common. Leave as empty array if none.`;
 
     const conversationText = transcript
       .map(m => `${m.role === 'assistant' ? 'AI' : speakerLabel}: ${m.content}`)
@@ -359,9 +457,11 @@ If the patient discussed or requested appointments with doctors, add each one to
       // Strip markdown code fences if model adds them
       const jsonStr = raw.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
       const summary = JSON.parse(jsonStr);
-      // Ensure call_type is correct regardless of what the LLM returns
-      console.log(`[summarize] parsed summary ok, urgency=${summary.urgency}`);
-      res.json({ ...summary, call_type });
+      const doctorId = resolveSummaryDoctorId(call_type, summary, req.body);
+      const consultation_kind = normalizeConsultationKind(call_type, summary.consultation_kind);
+      console.log(`[summarize] parsed summary ok, urgency=${summary.urgency}, doctor_id=${doctorId}, kind=${consultation_kind}`);
+      const { related_doctor_id, doctor_id: _dropped, ...rest } = summary;
+      res.json({ ...rest, call_type, doctor_id: doctorId, consultation_kind });
     } catch (e) {
       console.error('[summarize] LLM error:', e.response?.data || e.message);
       res.status(500).json({ error: 'Failed to generate summary', details: e.message });

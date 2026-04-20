@@ -268,30 +268,33 @@
     const container = document.getElementById('tab-calls');
     const doctor = allDoctors.find(d => d.id === doctorId);
     try {
-      const allSummaries = await API.healthcare.listSummaries(selectedProfile.id);
-      // Filter: show only calls that mention this doctor (by name)
-      const doctorName = doctor ? doctor.name.replace('Dr. ', '').toLowerCase() : '';
-      const summaries = doctor ? allSummaries.filter(s => {
-        const text = [s.chief_complaint, s.ai_recommendation, s.suggested_action, s.transcript_excerpt, s.related_doctor_name || ''].join(' ').toLowerCase();
-        return text.includes(doctorName) || text.includes(doctor.name.toLowerCase());
-      }) : allSummaries;
+      const summaries = await API.healthcare.listSummaries({
+        patient_id: selectedProfile.id,
+        doctor_id: doctorId
+      });
       if (summaries.length === 0) {
-        container.innerHTML = `<p class="empty-state">No calls related to ${doctor ? doctor.name : 'this doctor'} yet.</p>`;
+        container.innerHTML = `<p class="empty-state">No calls scoped to ${doctor ? doctor.name : 'this doctor'} yet.</p>`;
         return;
       }
       container.innerHTML = summaries.map(s => {
         const symptoms = Array.isArray(s.symptoms) ? s.symptoms.join(', ') : '';
         const meds = Array.isArray(s.medications_discussed) ? s.medications_discussed.join(', ') : '';
         const timeStr = s.created_at ? new Date(s.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+        const kind = s.consultation_kind || '';
+        const kindSlug = kind ? kind.replace(/_/g, '-') : 'other';
+        const kindLabel = UTILS.consultationKindLabel(kind, s.call_type);
+        const withDoctor = s.doctor_name ? `With ${escapeHtml(s.doctor_name)}` : 'Care team (not specified)';
         return `
           <div class="summary-card">
             <div class="summary-card-header">
               <span class="summary-card-patient">${timeStr}</span>
               <div class="summary-card-badges">
+                <span class="badge badge-consult-${kindSlug}" title="Consultation type">${escapeHtml(kindLabel)}</span>
                 <span class="badge badge-${s.call_type}">${s.call_type}</span>
                 <span class="badge badge-${s.urgency}">${s.urgency}</span>
               </div>
             </div>
+            <div class="summary-field summary-with-doctor"><span class="label">Doctor: </span><span class="value">${withDoctor}</span></div>
             ${s.chief_complaint ? `<div class="summary-field"><span class="label">Reason: </span><span class="value">${escapeHtml(s.chief_complaint)}</span></div>` : ''}
             ${symptoms ? `<div class="summary-field"><span class="label">Symptoms: </span><span class="value">${escapeHtml(symptoms)}</span></div>` : ''}
             ${meds ? `<div class="summary-field"><span class="label">Medications: </span><span class="value">${escapeHtml(meds)}</span></div>` : ''}
@@ -324,10 +327,14 @@
       container.innerHTML = appointments.map(a => {
         const dt = new Date(a.date_time).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
         const statusLabel = a.status === 'requested' ? '⏳ Requested' : a.status === 'confirmed' ? '✓ Confirmed' : '✗ Declined';
+        const withLine = a.doctor_name
+          ? `<div class="appt-with-doctor"><span class="label">With: </span>${escapeHtml(a.doctor_name)}</div>`
+          : '';
         return `
           <div class="appt-card${a.status === 'requested' ? ' pending' : ''}">
             <div class="appt-status status-${a.status}">${statusLabel}</div>
             <div class="appt-datetime">${dt}</div>
+            ${withLine}
             ${a.reason ? `<div class="appt-reason">Reason: ${escapeHtml(a.reason)}</div>` : ''}
           </div>
         `;
@@ -580,7 +587,17 @@
 
     if (transcript.length > 0 && profile) {
       console.log(`[stopCall] generating summary for ${callType}, ${transcript.length} messages`);
-      API.healthcare.summarize({ transcript, call_type: callType })
+      const care_team = allDoctors.map(d => ({
+        id: d.id,
+        name: d.name,
+        specialty: d.specialty || ''
+      }));
+      API.healthcare.summarize({
+        transcript,
+        call_type: callType,
+        care_team,
+        default_doctor_id: 'doctor-3'
+      })
         .then(async (summary) => {
           await API.healthcare.createSummary({ patient_id: profile.id, ...summary, transcript });
           console.log('[stopCall] summary saved');

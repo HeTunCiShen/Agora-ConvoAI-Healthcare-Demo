@@ -44,6 +44,11 @@ const doctorTranscript = [
   { role: 'assistant', content: 'No significant interaction between lisinopril and metformin. ACE inhibitors can rarely cause lactic acidosis risk in renal impairment — check eGFR before starting.' }
 ];
 
+const careTeamFixture = [
+  { id: 'doctor-1', name: 'Dr. James Williams', specialty: 'Cardiologist' },
+  { id: 'doctor-3', name: 'Dr. Emily Nguyen', specialty: 'General Practitioner' }
+];
+
 const mockPatientSummary = {
   call_type: 'condition-check',
   chief_complaint: 'Persistent headache and dizziness for two days',
@@ -53,7 +58,9 @@ const mockPatientSummary = {
   ai_recommendation: 'Monitor blood pressure closely and follow up with doctor',
   urgency: 'medium',
   transcript_excerpt: 'Patient reported BP of 142/88 and pain level 6.',
-  suggested_action: 'Review hypertension management at next appointment'
+  suggested_action: 'Review hypertension management at next appointment',
+  related_doctor_id: 'doctor-1',
+  consultation_kind: 'condition_followup'
 };
 
 const mockDoctorSummary = {
@@ -62,7 +69,8 @@ const mockDoctorSummary = {
   ai_recommendation: 'Lifestyle modifications first; lisinopril or amlodipine if needed. Check eGFR with metformin.',
   transcript_excerpt: 'Doctor asked about hypertension treatment and metformin interaction.',
   suggested_action: '',
-  urgency: 'low'
+  urgency: 'low',
+  consultation_kind: 'doctor_assistant'
 };
 
 function mockLlmResponse(summary) {
@@ -116,7 +124,9 @@ describe('POST /api/healthcare/summarize — patient call', () => {
   test('calls LLM and returns structured patient summary', async () => {
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3'
     });
 
     expect(res.status).toBe(200);
@@ -126,13 +136,17 @@ describe('POST /api/healthcare/summarize — patient call', () => {
     expect(typeof res.body.vitals_mentioned).toBe('object');
     expect(Array.isArray(res.body.medications_discussed)).toBe(true);
     expect(res.body.urgency).toMatch(/^(low|medium|high)$/);
+    expect(res.body.doctor_id).toBe('doctor-1');
+    expect(res.body.consultation_kind).toBe('condition_followup');
   });
 
   test('call_type in response is always the value sent, not what LLM returned', async () => {
     // LLM returns 'condition-check' but we sent 'patient' — should be overridden
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3'
     });
     expect(res.body.call_type).toBe('patient');
   });
@@ -140,7 +154,9 @@ describe('POST /api/healthcare/summarize — patient call', () => {
   test('sends transcript as LLM user message with Patient: label', async () => {
     await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3'
     });
 
     const llmPayload = axios.post.mock.calls[0][1];
@@ -163,19 +179,23 @@ describe('POST /api/healthcare/summarize — doctor call', () => {
   test('returns doctor-query summary with correct call_type', async () => {
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: doctorTranscript,
-      call_type: 'doctor-query'
+      call_type: 'doctor-query',
+      acting_doctor_id: 'doctor-2'
     });
 
     expect(res.status).toBe(200);
     expect(res.body.call_type).toBe('doctor-query');
     expect(res.body.chief_complaint).toBeTruthy();
     expect(res.body.ai_recommendation).toBeTruthy();
+    expect(res.body.doctor_id).toBe('doctor-2');
+    expect(res.body.consultation_kind).toBe('doctor_assistant');
   });
 
   test('sends transcript with Doctor: label, not Patient:', async () => {
     await request(app).post('/api/healthcare/summarize').send({
       transcript: doctorTranscript,
-      call_type: 'doctor-query'
+      call_type: 'doctor-query',
+      acting_doctor_id: 'doctor-2'
     });
 
     const llmPayload = axios.post.mock.calls[0][1];
@@ -206,7 +226,9 @@ describe('POST /api/healthcare/summarize — LLM edge cases', () => {
 
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3'
     });
 
     expect(res.status).toBe(200);
@@ -218,7 +240,9 @@ describe('POST /api/healthcare/summarize — LLM edge cases', () => {
 
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3'
     });
 
     expect(res.status).toBe(500);
@@ -232,7 +256,9 @@ describe('POST /api/healthcare/summarize — LLM edge cases', () => {
 
     const res = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3'
     });
 
     expect(res.status).toBe(500);
@@ -254,7 +280,9 @@ describe('Full flow: summarize → save → appears in feed', () => {
     // Step 1: generate summary
     const summarizeRes = await request(app).post('/api/healthcare/summarize').send({
       transcript: patientTranscript,
-      call_type: 'patient'
+      call_type: 'patient',
+      care_team: careTeamFixture,
+      default_doctor_id: 'doctor-3'
     });
     expect(summarizeRes.status).toBe(200);
 
@@ -268,6 +296,7 @@ describe('Full flow: summarize → save → appears in feed', () => {
     expect(saveRes.status).toBe(201);
     expect(saveRes.body.patient_id).toBe('patient-1');
     expect(saveRes.body.call_type).toBe('patient');
+    expect(saveRes.body.doctor_id).toBe('doctor-1');
 
     // Step 3: verify it appears in the feed
     const feedRes = await request(app).get('/api/healthcare/summaries');
@@ -284,7 +313,8 @@ describe('Full flow: summarize → save → appears in feed', () => {
     // Step 1: generate summary
     const summarizeRes = await request(app).post('/api/healthcare/summarize').send({
       transcript: doctorTranscript,
-      call_type: 'doctor-query'
+      call_type: 'doctor-query',
+      acting_doctor_id: 'doctor-1'
     });
     expect(summarizeRes.status).toBe(200);
 
@@ -295,6 +325,7 @@ describe('Full flow: summarize → save → appears in feed', () => {
     });
     expect(saveRes.status).toBe(201);
     expect(saveRes.body.call_type).toBe('doctor-query');
+    expect(saveRes.body.doctor_id).toBe('doctor-1');
 
     // Step 3: verify it appears in the feed
     const feedRes = await request(app).get('/api/healthcare/summaries');

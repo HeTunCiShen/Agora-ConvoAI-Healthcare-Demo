@@ -78,8 +78,21 @@ const API = {
         API.request(`/healthcare/profiles/${id}`),
       listProfiles: (role) =>
         API.request(`/healthcare/profiles${role ? '?role=' + role : ''}`),
-      listSummaries: (patientId) =>
-        API.request(`/healthcare/summaries${patientId ? '?patient_id=' + patientId : ''}`),
+      listSummaries: (arg) => {
+        let patient_id;
+        let doctor_id;
+        if (typeof arg === 'string') {
+          patient_id = arg;
+        } else if (arg && typeof arg === 'object') {
+          patient_id = arg.patient_id;
+          doctor_id = arg.doctor_id;
+        }
+        const params = new URLSearchParams();
+        if (patient_id) params.set('patient_id', patient_id);
+        if (doctor_id) params.set('doctor_id', doctor_id);
+        const qs = params.toString();
+        return API.request(`/healthcare/summaries${qs ? '?' + qs : ''}`);
+      },
       createSummary: (data) =>
         API.request('/healthcare/summaries', { method: 'POST', body: JSON.stringify(data) }),
       summarize: (data) =>
@@ -128,7 +141,24 @@ const STORAGE = {
 
 const UTILS = {
     generateChannelName: () => `channeName-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-    
+
+    /** Human-readable consultation category for call history (from LLM / DB). */
+    consultationKindLabel(kind, callType) {
+        const map = {
+            general_consulting: 'General consulting',
+            post_op_call: 'Post-op call',
+            appointment_booking: 'Appointment booking',
+            condition_followup: 'Condition follow-up',
+            doctor_assistant: 'Doctor assistant session',
+            other: 'Other'
+        };
+        if (kind && map[kind]) return map[kind];
+        if (callType === 'post-op') return 'Post-op call';
+        if (callType === 'doctor-query') return 'Doctor assistant session';
+        if (callType === 'patient') return 'General consulting';
+        return callType ? String(callType).replace(/-/g, ' ') : 'Call';
+    },
+
     formatTime: (date = new Date()) => {
         return date.toLocaleTimeString([], { 
             hour: '2-digit', 
