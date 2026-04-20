@@ -933,7 +933,12 @@
     document.getElementById('end-call-btn').classList.remove('hidden');
     updateAgentStateUI('speaking');
     injectCallPanel();
-    if (chatManager) { chatManager.enableChat(); chatManager.startNewSession(); chatManager.openChat(); }
+    if (chatManager) {
+      chatManager.enableChat();
+      chatManager.startNewSession();
+      // Only auto-open chat on desktop — on mobile it blocks the avatar
+      if (window.innerWidth > 768) chatManager.openChat();
+    }
   }
 
   function onCallStopped() {

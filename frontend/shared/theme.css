@@ -1050,7 +1050,7 @@ body {
 .chat-toggle:hover { transform: scale(1.05); }
 .chat-panel {
   position: fixed; top: 0; right: -400px;
-  width: 400px; height: 100vh;
+  width: 400px; height: 100vh; height: 100dvh;
   background: var(--surface-container-lowest);
   box-shadow: -8px 0 32px rgba(13,148,136,0.08);
   display: flex; flex-direction: column;
@@ -1203,7 +1203,17 @@ body {
 
   .profile-select-card { width: 160px; padding: 20px; }
 
-  .chat-panel { width: 100vw; right: -100vw; }
+  .chat-panel {
+    width: 100vw; right: -100vw;
+    height: 100vh; height: 100dvh;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .chat-panel .chat-input {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+  .chat-panel .chat-actions {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, px));
+  }
   .chat-toggle { bottom: 16px; right: 16px; width: 48px; height: 48px; }
 
   .call-overlay { padding: 12px; }
