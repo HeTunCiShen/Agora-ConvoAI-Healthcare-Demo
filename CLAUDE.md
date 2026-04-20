@@ -5,9 +5,15 @@ A **Healthcare AI Voice Demo** built on the Agora ConvoAI Web Template. Showcase
 **Event:** Sunrise Australia  
 **Stack:** Node.js + Express, vanilla JS, Agora RTC/RTM/ConvoAI SDK, Akool Avatar, ElevenLabs TTS, SQLite (better-sqlite3), Jest + Supertest  
 **Repo:** https://github.com/HeTunCiShen/Agora-ConvoAI-Healthcare-Demo  
-**Production:** https://agora-convoai-healthcare-demo-production.up.railway.app (Railway)  
-**Note:** This demo will be operated by customers directly — UI must be intuitive and self-explanatory.  
-**DB Note:** Deleting `healthcare.db` and re-seeding wipes all call summaries, appointments, and profile summaries. Seed only creates profiles + 1 care plan.
+**Production:** https://agora-convoai-healthcare-demo-production.up.railway.app (Railway — auto-deploys on `git push`)  
+**Design:** "Clinical Ether" design system — created via Stitch (Google), source files at `/Users/liangzheng/Desktop/ClaudeCodeDemo/stitch_healthcare_ai_voice_hub/`
+
+**Important notes for next developer:**
+- This demo is operated by customers directly — UI must be intuitive, no onboarding needed
+- Multiple customers may use simultaneously — all call state is session-scoped (safe)
+- `git push` to `main` auto-deploys to Railway (takes ~1-2 minutes)
+- DB is persistent on Railway (unlike Vercel where it resets)
+- Deleting `healthcare.db` and re-seeding wipes all runtime data (summaries, appointments, profile summaries). Seed only creates profiles + 1 care plan.
 
 ---
 
@@ -29,7 +35,7 @@ Set credentials in `.env` (copy from `.env.example`). Required env vars:
 | `AGORA_API_KEY`, `AGORA_API_SECRET` | ConvoAI REST API auth |
 | `LLM_URL`, `LLM_API_KEY`, `LLM_MODEL` | Conversation LLM (OpenAI — used by Agora ConvoAI agent) |
 | `TTS_ELEVENLABS_API_KEY`, `TTS_ELEVENLABS_VOICE_ID` | ElevenLabs TTS (field name is `key` not `api_key` in Agora API) |
-| `AKOOL_API_KEY`, `AKOOL_AVATAR_ID` | Akool avatar (optional — omit both to disable avatar, agent publishes audio directly) |
+| `AKOOL_API_KEY`, `AKOOL_AVATAR_ID` | Akool avatar (optional — omit both to disable, agent publishes audio directly) |
 | `SUMMARIZE_LLM_URL`, `SUMMARIZE_LLM_API_KEY` | Post-call summary LLM (Moonshot — separate from conversation LLM) |
 | `SIP_FROM_NUMBER` | Outbound SIP caller ID |
 | `SIP_DEMO_TO_NUMBER` | Override all SIP calls to this number (for testing — comment out to use user input) |
@@ -37,33 +43,44 @@ Set credentials in `.env` (copy from `.env.example`). Required env vars:
 
 ---
 
-## Pages
+## UI Design — Clinical Ether
 
-| URL | Description |
-|-----|-------------|
-| `/` | Landing page — links to /patient and /doctor |
-| `/patient` | Patient portal — master-detail with doctor cards, call AI, book appointments |
-| `/doctor` | Doctor dashboard — master-detail with patient cards, AI assistant, post-op SIP calls |
+The UI was redesigned using Stitch (Google) with a "Clinical Ether" design system. Key principles:
 
-Both pages show a profile picker on first load (stored in `sessionStorage`). "Switch user" clears it and reloads.
+- **No borders** — background color shifts separate sections (the "no-line" rule)
+- **Teal-tinted shadows** — `rgba(13,148,136,0.06)` instead of gray
+- **Glassmorphism** — frosted glass panels for call UI (`backdrop-filter: blur`)
+- **Gradient buttons** — `linear-gradient(135deg, primary, primary-dark)`
+- **Inter font** — loaded from Google Fonts
+- **Material Symbols** — icons throughout (phone_in_talk, call_end, support_agent, etc.)
+- **Responsive** — 768px breakpoint, master-detail collapses to list → detail with back button
 
-### Patient Page Layout
-- **Top bar:** patient profile + "Call AI Assistant" button + agent state indicator
-- **Left panel:** all 4 doctors as compact cards (click to select)
-- **Right panel:** selected doctor detail with 3 tabs — Profile, Call History, Appointments
-- "Request Appointment" button per doctor → inline form in Appointments tab
-- Call overlay with Akool avatar (9:16 video) / wave visualizer during active call
-- Auto-navigates to correct doctor's Appointments tab when post-call extraction creates one
-- Refreshes on tab focus (no SSE — avoids HTTP/1.1 connection limit with doctor page)
+### Page Layouts
 
-### Doctor Page Layout
-- **Top bar:** doctor profile + "Call AI Assistant" button + agent state indicator
-- **Left panel:** all 2 patients as compact cards (click to select)
-- **Right panel:** selected patient detail with 3 tabs — Profile, Call History, Appointments
-- "Post-Op Check-In Call" button per patient → phone number input with format validation → SIP call
-- Live transcript panel during SIP call with real-time AI/Patient dialogue and Stop button
-- Confirm/Decline buttons on appointment requests addressed to this doctor
-- SSE connection for live updates (new summaries, appointment changes)
+**Landing page (`/`):**
+- Centered two-card layout (Patient / Doctor) with ambient teal glow background
+- Agora logo in footer linking to agora.io
+- Mobile: cards stack as horizontal rows
+
+**Patient page (`/patient`):**
+- **Page nav:** white background with "HealthAI" brand + "Switch Patient" button
+- **Top bar:** patient profile info
+- **Fixed bottom-left pill:** Call AI Assistant button (on top) + agent state indicator (below), glassmorphism background
+- **Master-detail:** left panel = 4 doctor cards ("Care Team"), right panel = selected doctor detail with 3 tabs (Profile, Call History, Appointments)
+- **During call:** AI call glass panel appears as right column inside detail area (bento grid layout). Avatar video + wave visualizer. Panel persists when switching doctor tabs — video re-attaches to new DOM.
+- **Mobile:** master panel = full screen list, tap card → detail with back button, call controls stretch full width
+- **Chat:** toggle button bottom-right, panel slides from right. Does NOT auto-open on mobile.
+- **Refreshes on tab focus** (no SSE — avoids HTTP/1.1 connection limit with doctor page)
+
+**Doctor page (`/doctor`):**
+- Same nav/top-bar/call-controls pattern as patient page
+- **Master-detail:** left panel = 2 patient cards, right panel = patient detail with 3 tabs
+- **Post-Op Check-In Call button** in patient detail header → phone number input form → SIP call
+- **SIP call lifecycle:** status polling every 3s, live transcript panel (RTM), auto-summarize on end
+- **Appointments tab:** Confirm/Decline buttons (only for appointments addressed to this doctor)
+- **SSE connection** for live updates (summaries, appointments)
+- **During AI call:** same inline glass panel as patient page
+- **Chat:** auto-opens on desktop only, not mobile
 
 ---
 
@@ -79,7 +96,7 @@ backend/
     healthcareController.js    # makeHealthcareController(db, sse) factory — profiles, summaries,
                                #   appointments, care plans, profile summary generation, LLM summarize
   routes/
-    agora_routes.js            # /api/agora/* (GET channel-info, POST start, POST call, DELETE/POST stop, GET status)
+    agora_routes.js            # /api/agora/* (channel-info, start, call, stop, status)
     healthcare_routes.js       # /api/healthcare/*
   middleware/
     auth.js                    # HTTP Basic Auth middleware
@@ -89,30 +106,22 @@ backend/
     seed.js                    # seed(db) — 2 patients + 4 doctors + 1 care plan, INSERT OR IGNORE
 
 frontend/
-  index.html                   # Landing page
-  patient.html / patient.js    # Patient portal (master-detail layout, 714 lines JS)
-  doctor.html  / doctor.js     # Doctor dashboard (master-detail + SIP lifecycle, 905 lines JS)
+  index.html                   # Landing page (Clinical Ether design, Agora footer)
+  patient.html / patient.js    # Patient portal (master-detail, inline call panel)
+  doctor.html  / doctor.js     # Doctor dashboard (master-detail, SIP lifecycle, inline call panel)
   lib/
     agora-rtc-sdk-ng/          # Agora RTC SDK (copied from node_modules for deployment compatibility)
-    agora-rtm/                 # Agora RTM SDK (copied from node_modules for deployment compatibility)
+    agora-rtm/                 # Agora RTM SDK (copied from node_modules)
   shared/
-    theme.css                  # All styles: CSS variables, master-detail, tabs, cards, appointments,
-                               #   SIP live panel, transcript toggle, avatar container (596 lines)
+    theme.css                  # Clinical Ether design system — all styles, CSS variables, responsive
     profile-modal.js           # ProfileModal class — open(profile), close()
   utils/
     config.js                  # API.agora.*, API.healthcare.*, STORAGE.*, UTILS.*
-    chat.js                    # ChatManager class — handles RTM messages, session management
+    chat.js                    # ChatManager class — RTM messages, session management
     audioVisualizer.js         # Audio frequency visualizer for wave bars
 
-tests/
-  setup.js                     # Sets NODE_ENV=test
-  healthcare.test.js           # 24 tests — profiles, summaries, appointments CRUD
-  agoraController.test.js      # 6 tests for buildSystemPrompt
-  server.test.js               # 5 tests for route/HTML serving
-  db/database.test.js          # DB schema tests
-  db/seed.test.js              # Seeder tests (6 profiles, idempotency)
-  sse.test.js                  # SSE manager tests
-  summarize.integration.test.js  # Real LLM integration tests (run separately with npm run test:integration)
+tests/                         # 62 tests, 7 suites
+docs/superpowers/specs/        # Design specs for original demo and appointment module
 ```
 
 ---
@@ -139,151 +148,113 @@ tests/
 | POST | `/api/agora/start` | Start ConvoAI agent (web call) |
 | POST | `/api/agora/call` | Start ConvoAI agent + SIP phone call |
 | DELETE | `/api/agora/stop/:agentId` | Stop ConvoAI agent |
-| POST | `/api/agora/stop/:agentId` | Stop agent (POST alias for navigator.sendBeacon on tab close) |
-| GET | `/api/agora/status/:agentId` | Agent status (STARTING/RUNNING/STOPPED — 404 returns STOPPED) |
-| GET | `/api/healthcare/profiles?role=` | List profiles (optional role filter) |
+| POST | `/api/agora/stop/:agentId` | Stop agent (POST alias for sendBeacon on tab close) |
+| GET | `/api/agora/status/:agentId` | Agent status (STARTING/RUNNING/STOPPED — 404→STOPPED) |
+| GET | `/api/healthcare/profiles?role=` | List profiles |
 | GET | `/api/healthcare/profiles/:id` | Single profile |
 | GET | `/api/healthcare/summaries?patient_id=` | Call summaries (optional patient filter) |
-| POST | `/api/healthcare/summaries` | Save summary + transcript after call |
-| POST | `/api/healthcare/summarize` | LLM-generate structured summary from transcript (extracts appointments) |
+| POST | `/api/healthcare/summaries` | Save summary + transcript |
+| POST | `/api/healthcare/summarize` | LLM-generate structured summary (extracts appointments) |
 | GET | `/api/healthcare/profile-summary/:patientId` | Consolidated patient profile summary |
-| GET | `/api/healthcare/appointments?patient_id=` | List appointments (by patient, includes doctor names via JOIN) |
-| GET | `/api/healthcare/appointments?doctor_id=` | List appointments (by doctor, includes patient names via JOIN) |
-| POST | `/api/healthcare/appointments` | Create appointment (status: requested, broadcasts SSE) |
-| PUT | `/api/healthcare/appointments/:id` | Confirm/decline appointment (broadcasts SSE) |
+| GET | `/api/healthcare/appointments?patient_id=` | List appointments by patient |
+| GET | `/api/healthcare/appointments?doctor_id=` | List appointments by doctor |
+| POST | `/api/healthcare/appointments` | Create appointment (status: requested) |
+| PUT | `/api/healthcare/appointments/:id` | Confirm/decline appointment |
 | GET | `/api/healthcare/care-plans/:patientId` | Get care plan |
-| PUT | `/api/healthcare/care-plans/:id` | Approve/edit care plan (broadcasts SSE) |
+| PUT | `/api/healthcare/care-plans/:id` | Approve/edit care plan |
 
 ---
 
 ## Key Flows
 
 ### 1. Patient calls AI Assistant
-1. Patient clicks "Call AI Assistant" → frontend joins RTC+RTM, starts ConvoAI agent
-2. Agent prompt includes: patient profile, all appointments (requested+confirmed), consolidated history from prior calls, available doctors list with specialties, current Australian date/time
-3. Akool avatar renders AI face + ElevenLabs voice; RTM carries live transcript to chat panel
-4. Patient can discuss symptoms, ask questions, or request appointments (AI confirms verbally, says "appointment will be sent after this call")
-5. On "End Call" → full transcript sent to Moonshot LLM for structured summary extraction
-6. LLM returns: chief_complaint, symptoms, medications, recommendation, urgency, appointment_requests (array — supports multiple per call)
-7. Summary + full transcript saved to DB; appointment(s) created if extracted (fuzzy doctor name matching); patient profile summary regenerated (fire-and-forget with retry)
-8. Patient page auto-navigates to the relevant doctor's Appointments tab
-9. Doctor page receives SSE notification and refreshes
+1. Patient clicks "Call AI Assistant" (fixed bottom-left) → joins RTC+RTM, starts ConvoAI agent
+2. Agent prompt: patient profile + appointments + consolidated history + available doctors + Australian time
+3. Akool avatar + ElevenLabs voice; call glass panel appears in detail area (right column on desktop)
+4. On "End Call" → transcript → Moonshot LLM → structured summary + appointment extraction (multiple per call)
+5. Summary + transcript saved; appointments created; profile summary regenerated; UI auto-navigates to doctor's Appointments tab
 
 ### 2. Doctor initiates Post-Op SIP Call
-1. Doctor selects patient → clicks "Post-Op Check-In Call" → phone number input form appears
-2. Phone number validated (must start with +, 10-15 digits). `SIP_DEMO_TO_NUMBER` env var overrides if set.
-3. Backend calls Agora `/call` API with SIP block at top level (to_number, from_number, rtc_uid, rtc_token)
-4. SIP timeouts: 30s ring, 5 min max duration, 60s silence → hangup
-5. Patient's phone rings; AI greets with doctor's name and hospital
-6. Doctor page joins RTM to monitor live transcript (separate RTM instance with monitor UID 500000+)
-7. Status polling every 3s: Ringing → In Progress (with Stop button) → Completed
-8. When call ends: transcript summarized via Moonshot LLM and saved to DB
-9. If status poll fails 3x consecutively, assumes agent stopped and triggers cleanup
+1. Doctor clicks "Post-Op Check-In Call" → phone number form with validation
+2. Backend calls Agora `/call` API with SIP block (top-level, not inside properties)
+3. SIP timeouts: 30s ring, 5 min max, 60s silence
+4. Doctor page joins RTM to monitor transcript (monitor UID 500000+)
+5. Status polling 3s: Ringing → In Progress → Completed (3 consecutive failures → assume stopped)
+6. On end: transcript summarized and saved
 
 ### 3. Doctor calls AI Assistant
-Doctor clicks "Call AI Assistant" → same RTC+RTM+avatar flow as patient, uses `PROMPT_DOCTOR_ASSISTANT`, includes consolidated patient profiles for recent patients as context.
+Same RTC+RTM+avatar flow as patient. Uses `PROMPT_DOCTOR_ASSISTANT`. Includes patient profiles.
 
 ### 4. Appointment Lifecycle
-- Patient requests (via AI call extraction or manual inline form) → status: `requested`
-- Doctor sees all patient's appointments in detail panel → Confirm/Decline buttons (only on appointments addressed to this doctor)
-- Patient page refreshes on tab focus via `visibilitychange` (no SSE — avoids HTTP/1.1 connection limit)
-- Multiple appointments per call supported (LLM prompt says "Multiple appointments in one call are common")
-- SSE broadcasts `new_appointment` and `appointment_updated` events
+- Patient requests via AI call or manual form → `requested`
+- Doctor confirms/declines (only their own appointments)
+- Patient page refreshes on tab focus (no SSE). Doctor page uses SSE.
+- Multiple appointments per call supported
 
 ---
 
-## Architecture Decisions & Gotchas
+## Architecture Gotchas
 
-### SSE route before basicAuth
-`EventSource` can't set auth headers. `/events` is wired in `server.js` before `app.use('/api', basicAuth)`.
-
-### No in-call structured tags
-Voice TTS reads ALL LLM output aloud — tags like `<appointment>` would be spoken as "less than appointment greater than...". All structured extraction happens post-call via the `/summarize` endpoint. The AI is instructed to confirm appointment details verbally and say they'll be sent after the call.
-
-### Akool avatar UID publishes audio
-When avatar is enabled, the avatar UID (800000+ range) publishes audio, NOT the agent UID (1000+ range). `handleRTCUserPublished` checks both: `user.uid == agentUID || (avatarUID && user.uid == avatarUID)`. If avatar fails to publish within 5 seconds but agent status is RUNNING, `onCallStarted()` is force-triggered as fallback. If avatar ID is invalid, agent joins but stays muted — no audio at all.
-
-### ElevenLabs TTS field name
-Agora ConvoAI expects `key` (not `api_key`) for ElevenLabs params. This caused a 400 InvalidRequest until corrected.
-
-### HTTP/1.1 connection limit (6 per domain)
-Two SSE connections (patient + doctor page open simultaneously) block API calls. Solution: only the doctor page uses SSE. Patient page uses `visibilitychange` event to refresh on tab focus.
-
-### Auth credentials injected into HTML
-`serveHtml()` in `server.js` injects `window.APP_AUTH_USERNAME` / `window.APP_AUTH_PASSWORD` into `<head>`. Frontend `config.js` reads these for API `Authorization: Basic` headers.
-
-### Static files served from frontend/lib/
-Agora SDK JS files are copied from `node_modules/` into `frontend/lib/` because serverless platforms (Vercel) can't serve `node_modules` via `express.static`. The `/lib` route now maps to `frontend/lib/`, not `node_modules/`.
-
-### Call lifecycle — edge cases handled
-- **Tab close/refresh:** `beforeunload` fires `navigator.sendBeacon` to POST `/api/agora/stop/:agentId` (POST alias added alongside DELETE)
-- **Network drop:** RTC `connection-state-change` to `DISCONNECTED` auto-triggers cleanup
-- **Agent dies unexpectedly:** `user-left` event auto-triggers `stopCall()`
-- **Agent status 404 from Agora:** Backend returns `{ status: 'STOPPED' }` instead of 500
-- **SIP poll failures:** 3 consecutive failures → assume agent stopped → trigger `onSipCallEnded()`
-- **SIP call start vs RTM failure:** Separated into critical path (SIP call) and optional (RTM transcript). If RTM fails, call still runs with status polling.
-
-### Full transcript saved with summaries
-`call_summaries.transcript` stores the full conversation as a JSON array of `{role, content}` objects. Displayed in Call History via "Show Transcript" toggle button (hidden by default, scrollable block with color-coded AI/Patient labels).
-
-### Profile summary regeneration
-After each call summary is saved, backend regenerates a consolidated profile summary for that patient (all calls → LLM → single concise summary stored in `patient_profile_summaries`). Next call injects this instead of raw records. Has retry with backoff (3s, 6s) for rate limits.
-
-### SIP call request structure
-`sip` block is **top-level** (same level as `name` and `properties`), NOT inside `properties`. Phone numbers must have spaces stripped. SIP UID is in 600000+ range.
-
-### Dual LLM setup
-Live conversation uses OpenAI (`LLM_URL` / `LLM_API_KEY`) — this is what Agora ConvoAI calls. Post-call summarization and profile summary regeneration use Moonshot (`SUMMARIZE_LLM_URL` / `SUMMARIZE_LLM_API_KEY`) — a separate provider. If Moonshot is rate-limited (429), profile summary regeneration retries with backoff; the `/summarize` endpoint does not retry (fails silently, call data is not lost).
-
-### Multi-user safety
-All call state (agent IDs, channels, SIP state) is scoped per browser tab/session via JavaScript closures. One customer cannot stop another customer's call. SIP calls tracked separately from web calls (`sipAgentId` vs `agoraConvoAIAgentID`).
-
-### Call history filtering on patient page
-Patient page filters call history by doctor name: only shows calls that mention the selected doctor in chief_complaint, ai_recommendation, suggested_action, or transcript_excerpt. Doctor page shows ALL calls for a patient (full context).
+| Gotcha | Details |
+|--------|---------|
+| **SSE before basicAuth** | `/events` wired before `app.use('/api', basicAuth)` — EventSource can't set auth headers |
+| **No in-call tags** | Voice TTS reads ALL output aloud. Structured extraction is post-call only via `/summarize` |
+| **Avatar UID publishes audio** | When Akool enabled, avatar UID (800000+) publishes audio, not agent UID. `handleRTCUserPublished` checks both. 5s fallback if avatar doesn't publish. |
+| **ElevenLabs field name** | Agora expects `key` not `api_key` for ElevenLabs TTS params |
+| **HTTP/1.1 connection limit** | Only doctor page uses SSE. Patient page uses `visibilitychange` refresh. |
+| **Static files in frontend/lib/** | Agora SDK JS copied from node_modules — serverless platforms can't serve node_modules |
+| **Tab close cleanup** | `beforeunload` → `sendBeacon` POST to `/api/agora/stop/:agentId` |
+| **Network drop** | RTC `DISCONNECTED` → auto-cleanup |
+| **Agent crash** | `user-left` → auto `stopCall()` |
+| **SIP block is top-level** | Not inside `properties`. Phone numbers must have no spaces. |
+| **Dual LLM** | OpenAI for conversation, Moonshot for summarization. Profile summary has retry; `/summarize` does not. |
+| **Call panel persists across tabs** | `injectCallPanel()` re-runs after `renderDetailPanel()`. Avatar video re-attaches to new DOM. |
+| **Mobile chat** | Does not auto-open on call. Uses `100dvh` + `env(safe-area-inset-bottom)` for iOS Safari. |
 
 ---
 
 ## Deployment
 
-### Railway (production — recommended)
+### Railway (production)
 
-Deployed via GitHub integration. Railway provides persistent filesystem (SQLite works natively), auto-deploys on `git push`.
+Auto-deploys on `git push` to `main`. Persistent filesystem for SQLite.
 
 **URL:** https://agora-convoai-healthcare-demo-production.up.railway.app
-
-**Setup:**
-1. Connect GitHub repo `HeTunCiShen/Agora-ConvoAI-Healthcare-Demo` as a service
-2. Add all env vars in Railway dashboard (Variables tab → Raw Editor)
-3. Railway auto-detects Node.js, runs `npm start`
-4. Generate domain in Settings → Networking
-
-**Note:** Railway assigns its own `PORT` — do NOT set `PORT` in env vars (the app reads `process.env.PORT || 3000`).
-
-### Vercel (not recommended for this project)
-
-SQLite doesn't work on Vercel serverless — DB resets on cold starts. `vercel.json` and `.npmrc` are included for reference but **Railway is the production platform**.
-
-### GitHub
 
 ```bash
 git add -A
 git commit -m "description"
-git push   # auto-deploys to Railway
+git push   # auto-deploys to Railway in ~1-2 minutes
 ```
 
-`.gitignore` excludes: `.env`, `healthcare.db`, `node_modules/`, `.superpowers/`, `.vercel/`
+**Setup (if recreating):**
+1. Connect GitHub repo `HeTunCiShen/Agora-ConvoAI-Healthcare-Demo`
+2. Add env vars in Railway dashboard (Variables → Raw Editor)
+3. Generate domain in Settings → Networking
+4. Do NOT set `PORT` — Railway assigns its own
+
+### Vercel (not recommended)
+
+`vercel.json` and `.npmrc` included but SQLite resets on cold starts. Use Railway instead.
 
 ---
 
 ## Future Work
 
-- **Server-side transcript capture:** Currently transcripts only exist in browser memory (patient calls) or RTM monitor (SIP calls). If user closes tab, transcript is lost. SIP calls depend on Agora enabling RTM for SIP on the AppID. Long-term: implement server-side RTM listener or Agora webhook to capture transcripts independently of browser state.
-- **SIP RTM transcript:** Frontend implementation is complete (live transcript panel, console logging). Waiting for Agora to enable RTM for SIP calls on AppID `bcb29d150a73428985238d8cf3bbaff9`. Once enabled, transcript will flow automatically.
-- **Mobile responsive UI:** CSS breakpoint at 768px planned. Master-detail collapses to list → detail with back button. Designs being created in Stitch (Google). Implementation will update `theme.css` + HTML with media queries.
+- **Server-side transcript capture:** Transcripts only exist in browser memory. If tab closes, lost. SIP calls have no browser. Need server-side RTM listener or Agora webhook.
+- **SIP RTM transcript:** Frontend done (live panel, console logging). Waiting for Agora to enable RTM for SIP on AppID `bcb29d150a73428985238d8cf3bbaff9`.
+- **Floating transcript window:** Attempted but CSS positioning didn't work in the current layout. Currently inline toggle. Revisit with a dedicated modal/portal approach.
+- **Mobile bottom tab navigation:** Stitch designed it but not yet implemented. Would replace master-detail sidebar on mobile with Doctors/Appts/History/Profile tabs.
 
 ---
 
-## Design Specs
+## Design Specs & References
 
-- **Original spec:** `docs/superpowers/specs/2026-04-15-healthcare-ai-demo-design.md`
+- **Original demo spec:** `docs/superpowers/specs/2026-04-15-healthcare-ai-demo-design.md`
 - **Appointment module spec:** `docs/superpowers/specs/2026-04-17-appointment-module-design.md`
+- **Stitch designs (local):** `/Users/liangzheng/Desktop/ClaudeCodeDemo/stitch_healthcare_ai_voice_hub/`
+  - `landing_page_desktop/` + `landing_page_mobile/` — screen.png + code.html
+  - `patient_page_desktop/` + `patient_page_mobile/`
+  - `doctor_page_desktop/` + `doctor_page_mobile/`
+  - `aether_health/DESIGN.md` — Clinical Ether design system document
+  - `project_requirements_healthcare_ai_voice_demo.md` — PRD
