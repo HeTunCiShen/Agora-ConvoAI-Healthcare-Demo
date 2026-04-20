@@ -222,17 +222,58 @@
     tick(0);
   }
 
+  function getCallChromeHost() {
+    return document.getElementById('call-chrome-root');
+  }
+
   function getDesktopCallGlass() {
-    return document.querySelector('#detail-panel .call-inline-panel[data-call-chrome="1"] .call-glass-panel');
+    return document.querySelector('#call-chrome-root .call-inline-panel[data-call-chrome="1"] .call-glass-panel');
+  }
+
+  function ensureCallActiveRegionInGlass() {
+    const glass = getDesktopCallGlass();
+    const region = document.getElementById('call-active-region');
+    const slot = document.getElementById('mobile-call-slot');
+    if (region && glass && region.parentElement !== glass) glass.appendChild(region);
+    if (slot) {
+      slot.innerHTML = '';
+      slot.hidden = true;
+    }
+  }
+
+  function syncCallChromeLayout() {
+    const host = getCallChromeHost();
+    const col = document.getElementById('detail-call-column');
+    const main = document.getElementById('main-page');
+    const master = main && main.querySelector('.master-detail');
+    if (!host || !col || !main || !master) return;
+    const inCall = Boolean(agoraConvoAIAgentID && rtcJoined);
+    const hasChrome = Boolean(host.querySelector('.call-inline-panel[data-call-chrome="1"]'));
+    ensureCallActiveRegionInGlass();
+    if (isDesktopLayout()) {
+      host.classList.remove('call-chrome-root--mobile-front');
+      if (host.parentElement !== col) col.appendChild(host);
+      if (hasChrome) host.removeAttribute('hidden');
+      return;
+    }
+    if (inCall && hasChrome) {
+      host.classList.add('call-chrome-root--mobile-front');
+      if (host.parentElement !== main) main.insertBefore(host, master);
+      host.removeAttribute('hidden');
+    } else {
+      host.classList.remove('call-chrome-root--mobile-front');
+      if (host.parentElement !== col) col.appendChild(host);
+      host.setAttribute('hidden', '');
+    }
   }
 
   function ensureDesktopCallChrome() {
+    const host = getCallChromeHost();
+    const col = document.getElementById('detail-call-column');
     const panel = document.getElementById('detail-panel');
-    if (!panel || !panel.querySelector('.detail-content-area')) return;
-    let chrome = panel.querySelector('.call-inline-panel[data-call-chrome="1"]');
+    if (!host || !col || !panel || !panel.querySelector('.detail-content-area')) return;
+    let chrome = host.querySelector('.call-inline-panel[data-call-chrome="1"]');
     if (!chrome) {
-      const tabContent = panel.querySelector('.detail-content-area');
-      if (tabContent) tabContent.classList.add('detail-content-left');
       chrome = document.createElement('div');
       chrome.className = 'call-inline-panel';
       chrome.dataset.callChrome = '1';
@@ -271,9 +312,12 @@
             </div>
           </div>
         </div>`;
-      panel.appendChild(chrome);
-      panel.classList.add('detail-with-call');
+      host.appendChild(chrome);
+      col.classList.add('detail-call-column--with-call');
     }
+    if (isDesktopLayout()) host.removeAttribute('hidden');
+    else if (!agoraConvoAIAgentID || !rtcJoined) host.setAttribute('hidden', '');
+    syncCallChromeLayout();
     syncCallChromeAfterDetailRender();
   }
 
@@ -281,11 +325,10 @@
     const inCall = Boolean(agoraConvoAIAgentID && rtcJoined);
     if (inCall) {
       const region = document.getElementById('call-active-region');
-      const cover = document.querySelector('#detail-panel .call-idle-cover');
+      const cover = document.querySelector('#call-chrome-root .call-idle-cover');
       if (cover) cover.classList.add('hidden');
       if (region) {
         region.classList.remove('hidden');
-        if (!isDesktopLayout()) mountCallActiveToMobileSlot();
       }
       const avatarUser = avatarUID ? rtcRemoteUsers[avatarUID] : null;
       if (avatarUser && avatarUser.videoTrack) {
@@ -303,38 +346,18 @@
     } else {
       resetCallChromeToIdle();
     }
-  }
-
-  function mountCallActiveToMobileSlot() {
-    const slot = document.getElementById('mobile-call-slot');
-    const region = document.getElementById('call-active-region');
-    if (!slot || !region) return;
-    slot.innerHTML = '<div class="call-mobile-visual call-glass-panel call-glass-panel--mobile"></div>';
-    slot.querySelector('.call-mobile-visual').appendChild(region);
-    slot.hidden = false;
-  }
-
-  function unmountCallActiveFromMobileSlot() {
-    const glass = getDesktopCallGlass();
-    const region = document.getElementById('call-active-region');
-    const slot = document.getElementById('mobile-call-slot');
-    if (region && glass && region.parentElement !== glass) {
-      glass.appendChild(region);
-    }
-    if (slot) {
-      slot.innerHTML = '';
-      slot.hidden = true;
-    }
+    syncCallChromeLayout();
   }
 
   function resetCallChromeToIdle() {
-    unmountCallActiveFromMobileSlot();
+    ensureCallActiveRegionInGlass();
     hideAvatarAudioVisualLayer();
     resetAvatarMediaSlot();
-    const cover = document.querySelector('#detail-panel .call-idle-cover');
+    const cover = document.querySelector('#call-chrome-root .call-idle-cover');
     if (cover) cover.classList.remove('hidden');
     const region = document.getElementById('call-active-region');
     if (region) region.classList.add('hidden');
+    syncCallChromeLayout();
   }
 
   // ===========================
@@ -575,9 +598,7 @@
     window.addEventListener('resize', () => {
       clearTimeout(callChromeResizeTimer);
       callChromeResizeTimer = setTimeout(() => {
-        if (!agoraConvoAIAgentID || !rtcJoined) return;
-        if (isDesktopLayout()) unmountCallActiveFromMobileSlot();
-        else mountCallActiveToMobileSlot();
+        syncCallChromeLayout();
         syncCallChromeAfterDetailRender();
       }, 120);
     });
@@ -952,12 +973,11 @@
     document.querySelectorAll('.call-ai-end-btn').forEach(b => b.classList.remove('hidden'));
     updateAgentStateUI('speaking');
     ensureDesktopCallChrome();
-    const cover = document.querySelector('#detail-panel .call-idle-cover');
+    const cover = document.querySelector('#call-chrome-root .call-idle-cover');
     if (cover) cover.classList.add('hidden');
     const region = document.getElementById('call-active-region');
     if (region) {
       region.classList.remove('hidden');
-      if (!isDesktopLayout()) mountCallActiveToMobileSlot();
     }
     const ac = document.getElementById('avatar-container');
     if (ac) {
@@ -976,6 +996,7 @@
         }
       }
     }
+    syncCallChromeLayout();
     if (chatManager) { chatManager.enableChat(); chatManager.startNewSession(); }
   }
 
