@@ -347,10 +347,10 @@
     ensureCallActiveRegionInGlass();
     hideAvatarAudioVisualLayer();
     resetAvatarMediaSlot();
-    const cover = document.querySelector('#call-chrome-root .call-idle-cover');
-    if (cover) cover.classList.remove('hidden');
     const region = document.getElementById('call-active-region');
     if (region) region.classList.add('hidden');
+    const cover = document.querySelector('#call-chrome-root .call-idle-cover');
+    if (cover) cover.classList.remove('hidden');
     syncCallChromeLayout();
   }
 

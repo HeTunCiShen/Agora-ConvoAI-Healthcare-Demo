@@ -1001,11 +1001,18 @@ body {
 .call-inline-panel[data-call-chrome='1'] {
   min-width: 0;
 }
-.detail-call-column.detail-call-column--with-call > .call-chrome-root .call-glass-panel {
+/* Host may sit in detail-call-column (desktop) or under #main-page (mobile in-call); keep stretch so
+   #call-active-region gets width (absolute poster/video do not expand the flex item alone). */
+#call-chrome-root .call-glass-panel {
   max-width: none;
   width: 100%;
   margin: 0;
   align-items: stretch;
+}
+#call-chrome-root #call-active-region {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .call-inline-controls {
   display: flex;
