@@ -130,7 +130,6 @@ const startConversation = async (req, res) => {
             }
           }
         } : {}),
-        /* turn_detection disabled — suspected API / behavior issues
         turn_detection: {
           mode: "default",
           config: {
@@ -147,12 +146,11 @@ const startConversation = async (req, res) => {
               mode: "semantic",
               semantic_config: {
                 silence_duration_ms: 320,
-                max_wait_ms: 3000
+                max_wait_ms: 1200
               }
             }
           }
         },
-        */
         advanced_features: {
           enable_bhvs: true,
           enable_rtm: true
@@ -278,7 +276,6 @@ const startSIPCall = async (req, res) => {
             voice_id: process.env.TTS_ELEVENLABS_VOICE_ID
           }
         },
-        /* turn_detection disabled — suspected API / behavior issues
         turn_detection: {
           mode: "default",
           config: {
@@ -295,12 +292,11 @@ const startSIPCall = async (req, res) => {
               mode: "semantic",
               semantic_config: {
                 silence_duration_ms: 320,
-                max_wait_ms: 3000
+                max_wait_ms: 1200
               }
             }
           }
         },
-        */
         advanced_features: {
           enable_bhvs: true,
           enable_rtm: true
