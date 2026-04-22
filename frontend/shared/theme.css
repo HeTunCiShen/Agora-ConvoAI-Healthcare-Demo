@@ -1357,16 +1357,21 @@ body {
     height: 100vh; height: 100dvh;
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
-  .chat-panel .chat-input {
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  }
+  /* Mobile: hide typing + text entry UI; RTM / ChatManager still work (toggle + history). */
+  .chat-panel .typing-indicator,
+  .chat-panel .chat-input,
   .chat-panel .chat-actions {
-    padding-bottom: calc(8px + env(safe-area-inset-bottom, px));
+    display: none !important;
   }
   .chat-toggle { bottom: 16px; right: 16px; width: 48px; height: 48px; }
 
   .call-overlay { padding: 12px; }
   .avatar-container { max-width: 100%; }
+
+  /* Post-op SIP tel field: 16px+ prevents iOS Safari focus zoom (reads as “zoom into dialog”). */
+  .sip-call-form input[type='tel'] {
+    font-size: 16px;
+  }
 }
 
 /* Hide mobile-only elements on desktop */

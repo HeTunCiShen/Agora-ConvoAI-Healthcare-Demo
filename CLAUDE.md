@@ -13,7 +13,17 @@ A **Healthcare AI Voice Demo** built on the Agora ConvoAI Web Template. Showcase
 - Multiple customers may use simultaneously — all call state is session-scoped (safe)
 - `git push` to `main` auto-deploys to Railway (takes ~1-2 minutes)
 - DB is persistent on Railway (unlike Vercel where it resets)
-- Deleting `healthcare.db` and re-seeding wipes all runtime data (summaries, appointments, profile summaries). Seed only creates profiles + 1 care plan.
+- Deleting `healthcare.db` and re-seeding wipes all runtime data (summaries, appointments, profile summaries). Seed (re)creates profiles, **one** care plan, and **fixed-id mock summaries + appointments** for demo lists.
+
+## Recent evolution (2026)
+
+Maintainer pass — demo data, summary scoping, appointment hygiene, and Clinical Ether call UX:
+
+- **Summaries:** `call_summaries` rows carry `doctor_id` + `consultation_kind`. `GET /api/healthcare/summaries` supports `patient_id` with optional `doctor_id` (patient portal per–care-team history); doctor views list doctor-scoped rows. `/summarize` + create-summary flows and UI badges follow the same model.
+- **Appointments:** Stricter post-call extraction (Moonshot prompt + server `filterSpuriousAppointmentRequests` + patient client dedupe) avoids duplicate `requested` rows when the user only discussed existing visits. Regression coverage in `tests/summarize.test.js`.
+- **Seed:** `seed.js` inserts fixed-id **mock call summaries** (two per patient, distinct doctors/kinds) and **mock appointments** (two per patient) so fresh Railway/Vercel deploys show realistic lists alongside profiles + care plan.
+- **Call chrome DOM:** Right column is `#detail-call-column` → `#detail-panel` (doctor/patient tabs only) **+** `#call-chrome-root` (persistent RTC/call UI). Switching tabs **does not** re-create the call subtree. Desktop: two-column grid on `detail-call-column--with-call`. Mobile: `#call-chrome-root` stays `hidden` until a web call starts, then `syncCallChromeLayout()` reparents it **immediately before** `.master-detail` (Care Team / Patients block). Asset `frontend/shared/cover.png` (320×569) powers idle chrome and in-call poster until Akool video; `audioVisualizer.js` draws **wave bars inside the avatar frame** until video is presentable, then both poster and bars hide. Glass header row (AI label + “Speaking” pill) removed. **Doctor page:** chat opens **only** when the user taps the chat toggle — not on call start.
+- **Mobile avatar bugfix:** When `#call-chrome-root` sits under `#main-page`, `#call-chrome-root .call-glass-panel` must keep `align-items: stretch` and `#call-active-region` needs full width so `aspect-ratio` on `.avatar-container` resolves (absolute poster/video do not expand the flex item alone). `resetCallChromeToIdle()` hides `#call-active-region` before revealing the idle cover to avoid an end-call flash.
 
 ---
 
@@ -23,7 +33,7 @@ A **Healthcare AI Voice Demo** built on the Agora ConvoAI Web Template. Showcase
 npm install --force   # first time only (--force needed for agora-rtm peer dep)
 npm start             # production server at http://localhost:3000
 npm run dev           # dev server with nodemon auto-reload
-npm test              # 62 tests, 7 suites — all should pass
+npm test              # 69 tests, 7 suites — all should pass
 npm run test:integration  # LLM integration tests (hits real Moonshot API, run separately)
 ```
 
@@ -65,22 +75,22 @@ The UI was redesigned using Stitch (Google) with a "Clinical Ether" design syste
 **Patient page (`/patient`):**
 - **Page nav:** white background with "HealthAI" brand + "Switch Patient" button
 - **Top bar:** patient profile info
-- **Fixed bottom-left pill:** Call AI Assistant button (on top) + agent state indicator (below), glassmorphism background
-- **Master-detail:** left panel = 4 doctor cards ("Care Team"), right panel = selected doctor detail with 3 tabs (Profile, Call History, Appointments)
-- **During call:** AI call glass panel appears as right column inside detail area (bento grid layout). Avatar video + wave visualizer. Panel persists when switching doctor tabs — video re-attaches to new DOM.
-- **Mobile:** master panel = full screen list, tap card → detail with back button, call controls stretch full width
-- **Chat:** toggle button bottom-right, panel slides from right. Does NOT auto-open on mobile.
+- **Fixed bottom (mobile only):** pill with Call / End + agent state (`mobile-call-controls`); desktop uses buttons inside the call glass column instead
+- **Master-detail:** left = 4 doctor cards ("Care Team"); right = `#detail-call-column` containing **`#detail-panel`** (selected doctor: header + 3 tabs: Profile, Call History, Appointments) and **`#call-chrome-root`** (call glass: start/end, state, idle `cover.png`, avatar poster / waves / video). **Request Appointment** lives in the Appointments tab, not the header.
+- **Desktop in-call:** `detail-call-column--with-call` is a two-column grid — tabs column | call chrome. **Switching doctors does not remount call chrome** (it is not inside `innerHTML` of `#detail-panel`).
+- **Mobile in-call:** `#call-chrome-root` is hoisted under `#main-page` **above** `.master-detail` so avatar and controls are visible while the list/detail stack stays below; `window.resize` re-runs `syncCallChromeLayout()` + `syncCallChromeAfterDetailRender()`.
+- **Chat:** toggle bottom-right; does not auto-open on mobile.
 - **Refreshes on tab focus** (no SSE — avoids HTTP/1.1 connection limit with doctor page)
 
 **Doctor page (`/doctor`):**
-- Same nav/top-bar/call-controls pattern as patient page
-- **Master-detail:** left panel = 2 patient cards, right panel = patient detail with 3 tabs
+- Same nav / top-bar / mobile fixed controls pattern as patient page
+- **Master-detail:** left = patient cards; right = `#detail-call-column` with **`#detail-panel`** (patient detail + tabs) + **`#call-chrome-root`** (same persistent call chrome pattern as patient)
 - **Post-Op Check-In Call button** in patient detail header → phone number input form → SIP call
 - **SIP call lifecycle:** status polling every 3s, live transcript panel (RTM), auto-summarize on end
 - **Appointments tab:** Confirm/Decline buttons (only for appointments addressed to this doctor)
 - **SSE connection** for live updates (summaries, appointments)
-- **During AI call:** same inline glass panel as patient page
-- **Chat:** auto-opens on desktop only, not mobile
+- **During AI call:** same call chrome behavior and assets as patient (cover, waves-until-video, Akool when configured)
+- **Chat:** opens **only** when the user taps the chat toggle (no auto-open on call start, any viewport)
 
 ---
 
@@ -101,26 +111,27 @@ backend/
   middleware/
     auth.js                    # HTTP Basic Auth middleware
   db/
-    database.js                # createDb(path) — SQLite schema: profiles, call_summaries (with transcript),
-                               #   appointments, patient_profile_summaries, care_plans, media_attachments, sse_events
-    seed.js                    # seed(db) — 2 patients + 4 doctors + 1 care plan, INSERT OR IGNORE
+    database.js                # createDb(path) — SQLite schema: profiles, call_summaries (transcript, doctor_id,
+                               #   consultation_kind), appointments, patient_profile_summaries, care_plans, …
+    seed.js                    # seed(db) — profiles, care plan, mock summaries + mock appointments (INSERT OR IGNORE)
 
 frontend/
   index.html                   # Landing page (Clinical Ether design, Agora footer)
-  patient.html / patient.js    # Patient portal (master-detail, inline call panel)
-  doctor.html  / doctor.js     # Doctor dashboard (master-detail, SIP lifecycle, inline call panel)
+  patient.html / patient.js    # Patient portal — master-detail + `#detail-call-column` / `#call-chrome-root` call chrome
+  doctor.html  / doctor.js     # Doctor dashboard — same column layout + SIP post-op flow
   lib/
     agora-rtc-sdk-ng/          # Agora RTC SDK (copied from node_modules for deployment compatibility)
     agora-rtm/                 # Agora RTM SDK (copied from node_modules)
   shared/
     theme.css                  # Clinical Ether design system — all styles, CSS variables, responsive
+    cover.png                  # 320×569 idle / in-call poster art (Clinical Ether)
     profile-modal.js           # ProfileModal class — open(profile), close()
   utils/
     config.js                  # API.agora.*, API.healthcare.*, STORAGE.*, UTILS.*
     chat.js                    # ChatManager class — RTM messages, session management
     audioVisualizer.js         # Audio frequency visualizer for wave bars
 
-tests/                         # 62 tests, 7 suites
+tests/                         # 69 Jest tests, 7 suites (see `npm test`)
 docs/superpowers/specs/        # Design specs for original demo and appointment module
 ```
 
@@ -152,7 +163,8 @@ docs/superpowers/specs/        # Design specs for original demo and appointment 
 | GET | `/api/agora/status/:agentId` | Agent status (STARTING/RUNNING/STOPPED — 404→STOPPED) |
 | GET | `/api/healthcare/profiles?role=` | List profiles |
 | GET | `/api/healthcare/profiles/:id` | Single profile |
-| GET | `/api/healthcare/summaries?patient_id=` | Call summaries (optional patient filter) |
+| GET | `/api/healthcare/summaries?patient_id=` | Call summaries; add `doctor_id` to scope patient history to one care-team member |
+| GET | `/api/healthcare/summaries?doctor_id=` | Doctor-scoped summaries list (doctor dashboard) |
 | POST | `/api/healthcare/summaries` | Save summary + transcript |
 | POST | `/api/healthcare/summarize` | LLM-generate structured summary (extracts appointments) |
 | GET | `/api/healthcare/profile-summary/:patientId` | Consolidated patient profile summary |
@@ -168,11 +180,11 @@ docs/superpowers/specs/        # Design specs for original demo and appointment 
 ## Key Flows
 
 ### 1. Patient calls AI Assistant
-1. Patient clicks "Call AI Assistant" (fixed bottom-left) → joins RTC+RTM, starts ConvoAI agent
+1. Patient clicks "Call AI Assistant" (desktop: in glass column; mobile: fixed bottom bar) → joins RTC+RTM, starts ConvoAI agent
 2. Agent prompt: patient profile + appointments + consolidated history + available doctors + Australian time
-3. Akool avatar + ElevenLabs voice; call glass panel appears in detail area (right column on desktop)
+3. Akool avatar + ElevenLabs voice when configured; call chrome lives in `#call-chrome-root` (right column desktop; hoisted above master-detail on mobile). Poster + optional frequency bars until remote video is presentable.
 4. On "End Call" → transcript → Moonshot LLM → structured summary + appointment extraction (multiple per call)
-5. Summary + transcript saved; appointments created; profile summary regenerated; UI auto-navigates to doctor's Appointments tab
+5. Summary + transcript saved; appointments created (with dedupe guards); profile summary regenerated; UI auto-navigates to doctor's Appointments tab when new requests were created
 
 ### 2. Doctor initiates Post-Op SIP Call
 1. Doctor clicks "Post-Op Check-In Call" → phone number form with validation
@@ -208,7 +220,7 @@ Same RTC+RTM+avatar flow as patient. Uses `PROMPT_DOCTOR_ASSISTANT`. Includes pa
 | **Agent crash** | `user-left` → auto `stopCall()` |
 | **SIP block is top-level** | Not inside `properties`. Phone numbers must have no spaces. |
 | **Dual LLM** | OpenAI for conversation, Moonshot for summarization. Profile summary has retry; `/summarize` does not. |
-| **Call panel persists across tabs** | `injectCallPanel()` re-runs after `renderDetailPanel()`. Avatar video re-attaches to new DOM. |
+| **Call panel persists across tabs** | Call UI mounts once under `#call-chrome-root` (sibling of `#detail-panel`). `renderDetailPanel()` only replaces tab markup inside `#detail-panel` — RTC subtree is stable. `syncCallChromeAfterDetailRender()` re-binds remote video if needed. |
 | **Mobile chat** | Does not auto-open on call. Uses `100dvh` + `env(safe-area-inset-bottom)` for iOS Safari. |
 
 ---
