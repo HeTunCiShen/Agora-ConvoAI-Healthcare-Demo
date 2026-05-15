@@ -186,7 +186,7 @@ const MOCK_APPOINTMENTS = [
     id: 'seed-appt-p1-1',
     patient_id: 'patient-1',
     doctor_id: 'doctor-1',
-    date_time: '2026-04-28T10:00:00.000Z',
+    date_time: '2026-05-28T10:00:00.000Z',
     status: 'confirmed',
     reason: 'Hypertension follow-up and home BP review',
     created_at: '2026-04-01T08:00:00.000Z',
@@ -196,7 +196,7 @@ const MOCK_APPOINTMENTS = [
     id: 'seed-appt-p1-2',
     patient_id: 'patient-1',
     doctor_id: 'doctor-3',
-    date_time: '2026-05-06T14:30:00.000Z',
+    date_time: '2026-06-06T14:30:00.000Z',
     status: 'requested',
     reason: 'Annual GP check-up and medication review',
     created_at: '2026-04-10T11:00:00.000Z',
@@ -206,7 +206,7 @@ const MOCK_APPOINTMENTS = [
     id: 'seed-appt-p2-1',
     patient_id: 'patient-2',
     doctor_id: 'doctor-2',
-    date_time: '2026-04-22T11:00:00.000Z',
+    date_time: '2026-05-22T11:00:00.000Z',
     status: 'confirmed',
     reason: 'Post-operative knee review and wound check',
     created_at: '2026-04-03T09:30:00.000Z',
@@ -216,7 +216,7 @@ const MOCK_APPOINTMENTS = [
     id: 'seed-appt-p2-2',
     patient_id: 'patient-2',
     doctor_id: 'doctor-2',
-    date_time: '2026-05-01T09:30:00.000Z',
+    date_time: '2026-06-01T09:30:00.000Z',
     status: 'requested',
     reason: 'Physiotherapy progress review before return to work',
     created_at: '2026-04-11T16:20:00.000Z',
@@ -246,8 +246,9 @@ function seed(db) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
+  // REPLACE (not IGNORE) so seeded fixed-id rows refresh on Railway's persistent DB across deploys. Runtime UUIDs are safe.
   const insertAppointment = db.prepare(`
-    INSERT OR IGNORE INTO appointments
+    INSERT OR REPLACE INTO appointments
     (id, patient_id, doctor_id, date_time, status, reason, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);

@@ -135,12 +135,7 @@ const startConversation = async (req, res) => {
           config: {
             speech_threshold: 0.5,
             start_of_speech: {
-              mode: "vad",
-              vad_config: {
-                interrupt_duration_ms: 160,
-                speaking_interrupt_duration_ms: 320,
-                prefix_padding_ms: 800
-              }
+              mode: "semantic"
             },
             end_of_speech: {
               mode: "semantic",
@@ -281,12 +276,7 @@ const startSIPCall = async (req, res) => {
           config: {
             speech_threshold: 0.5,
             start_of_speech: {
-              mode: "vad",
-              vad_config: {
-                interrupt_duration_ms: 160,
-                speaking_interrupt_duration_ms: 320,
-                prefix_padding_ms: 800
-              }
+              mode: "semantic"
             },
             end_of_speech: {
               mode: "semantic",
