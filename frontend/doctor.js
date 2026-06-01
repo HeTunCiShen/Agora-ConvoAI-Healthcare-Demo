@@ -419,7 +419,7 @@
     const form = document.createElement('div');
     form.className = 'appt-form sip-call-form';
     form.innerHTML = `
-      <label>Patient phone number</label>
+      <label>Patient phone number <span id="sip-cn-notice" style="color:#ef4444;font-size:11px;font-weight:400;display:none;">Chinese Mainland Phone Number is not supported yet.</span></label>
       <input type="tel" id="sip-phone" placeholder="+61 400 123 456" />
       <div id="sip-phone-error" style="color:#ef4444;font-size:11px;margin:-6px 0 8px;display:none;"></div>
       <div style="font-size:11px;color:#9ca3af;margin:-4px 0 10px;">Format: country code + number, e.g. +61 412 345 678 (AU) or +1 408 603 8971 (US)</div>
@@ -432,9 +432,20 @@
     const header = panel.querySelector('.detail-header');
     header.after(form);
 
+    const cnNotice = form.querySelector('#sip-cn-notice');
+    const isMainlandChina = (value) => value.replace(/[\s\-()]/g, '').startsWith('+86');
+
+    form.querySelector('#sip-phone').addEventListener('input', (e) => {
+      cnNotice.style.display = isMainlandChina(e.target.value) ? 'inline' : 'none';
+    });
+
     form.querySelector('#sip-confirm').addEventListener('click', () => {
       const phone = form.querySelector('#sip-phone').value.trim();
       const errorEl = form.querySelector('#sip-phone-error');
+      if (isMainlandChina(phone)) {
+        cnNotice.style.display = 'inline';
+        return;
+      }
       // Validate: must start with + and have at least 10 digits
       const digitsOnly = phone.replace(/[\s\-()]/g, '');
       if (!digitsOnly.match(/^\+\d{10,15}$/)) {
