@@ -386,7 +386,8 @@ body {
 .device-settings-note { font-size: 11px; color: var(--on-surface-variant); }
 
 @media (max-width: 768px) {
-  .device-setting-btn { display: none; }
+  /* Higher specificity than .switch-user-btn so the button stays hidden on mobile. */
+  .page-nav-right .device-setting-btn { display: none; }
   .device-settings-popover { display: none; }
 }
 

@@ -37,9 +37,11 @@
     buildPopover();
     button.addEventListener('click', (e) => {
       e.stopPropagation();
-      isOpen() ? close() : open();
+      toggle();
     });
   }
+
+  function toggle() { isOpen() ? close() : open(); }
 
   function buildPopover() {
     popover = document.createElement('div');
@@ -92,20 +94,24 @@
 
   function isOpen() { return popover && !popover.hidden; }
 
-  async function open() {
-    await refreshDevices();
-    position();
+  function open() {
+    if (isOpen()) return;
+    // Show immediately — opening must never depend on async device enumeration
+    // (getMicrophones() can block on a permission prompt). The opening click's
+    // own mousedown already fired before this runs, and we stopPropagation on
+    // the click, so registering the outside-click listener now is safe.
     popover.hidden = false;
-    // Defer so the click that opened the popover doesn't immediately close it.
-    setTimeout(() => {
-      document.addEventListener('mousedown', onOutsideClick);
-      window.addEventListener('resize', position);
-      window.addEventListener('scroll', position, true);
-    }, 0);
+    position();
+    document.addEventListener('mousedown', onOutsideClick);
+    window.addEventListener('resize', position);
+    window.addEventListener('scroll', position, true);
+    // Populate device lists (and trigger the permission prompt) afterward,
+    // then re-position since the content height may have changed.
+    refreshDevices().then(position).catch(() => {});
   }
 
   function close() {
-    if (!popover) return;
+    if (!isOpen()) return;
     popover.hidden = true;
     document.removeEventListener('mousedown', onOutsideClick);
     window.removeEventListener('resize', position);
@@ -113,7 +119,8 @@
   }
 
   function onOutsideClick(e) {
-    if (popover.contains(e.target) || (button && button.contains(e.target))) return;
+    const t = e.target;
+    if (t.closest && (t.closest('.device-settings-popover') || t.closest('#device-setting-btn'))) return;
     close();
   }
 
