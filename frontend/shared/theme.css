@@ -352,6 +352,10 @@ body {
   flex-direction: column;
   gap: 14px;
 }
+/* The base rule above sets display:flex, which (as author CSS) overrides the
+   browser's [hidden]{display:none}. This higher-specificity rule restores the
+   hidden behavior so popover.hidden = true actually hides it. */
+.device-settings-popover[hidden] { display: none; }
 .device-settings-title {
   font-size: 12px;
   font-weight: 700;
