@@ -581,6 +581,21 @@
       location.reload();
     });
 
+    // Device Settings popover (mic / speaker). Selecting a device applies live
+    // when in a call, or is remembered for the next call when idle.
+    if (window.DeviceSettings) {
+      DeviceSettings.init({
+        buttonId: 'device-setting-btn',
+        applyMic: async (id) => { if (rtcLocalAudioTrack) await rtcLocalAudioTrack.setDevice(id); },
+        applySpeaker: async (id) => {
+          for (const uid in rtcRemoteUsers) {
+            const u = rtcRemoteUsers[uid];
+            if (u && u.audioTrack) { try { await u.audioTrack.setPlaybackDevice(id); } catch (e) {} }
+          }
+        },
+      });
+    }
+
     // Fix 1: stop agent on tab close/refresh (best-effort via sendBeacon)
     window.addEventListener('beforeunload', () => {
       if (agoraConvoAIAgentID) {
@@ -866,7 +881,10 @@
   // AGORA RTC
   // ===========================
   async function joinRTCChannel(appId, channel, uid, token) {
-    rtcLocalAudioTrack = await AgoraRTC.createMicrophoneAudioTrack();
+    const preferredMicId = window.DeviceSettings ? DeviceSettings.getMicId() : null;
+    rtcLocalAudioTrack = await AgoraRTC.createMicrophoneAudioTrack(
+      preferredMicId ? { microphoneId: preferredMicId } : {}
+    );
     await rtcClient.join(appId, channel, token || null, uid);
     await rtcClient.publish([rtcLocalAudioTrack]);
     rtcJoined = true;
@@ -886,6 +904,10 @@
     if (mediaType === 'audio') {
       rtcClient.subscribe(user, mediaType).then(() => {
         user.audioTrack.play();
+        const preferredSpeakerId = window.DeviceSettings ? DeviceSettings.getSpeakerId() : null;
+        if (preferredSpeakerId) {
+          try { user.audioTrack.setPlaybackDevice(preferredSpeakerId); } catch (e) {}
+        }
         const isCallAudio = user.uid == agentUID || (avatarUID && user.uid == avatarUID);
         console.log('[RTC] subscribed audio uid=%s isCallAudio=%s', user.uid, isCallAudio);
         if (isCallAudio) {

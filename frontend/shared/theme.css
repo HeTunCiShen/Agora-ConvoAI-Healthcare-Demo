@@ -336,6 +336,61 @@ body {
 .page-nav-right { display: flex; align-items: center; gap: 12px; }
 
 /* ===========================
+   DEVICE SETTINGS (mic / speaker picker) — desktop only
+   =========================== */
+.device-settings-popover {
+  position: fixed;
+  z-index: 200;
+  width: 280px;
+  background: rgba(249,249,255,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.device-settings-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--on-surface-variant);
+}
+.device-settings-section { display: flex; flex-direction: column; gap: 6px; }
+.device-settings-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary);
+}
+.device-settings-label .material-symbols-outlined { font-size: 16px; }
+.device-settings-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.device-settings-select:hover:not(:disabled) { background: var(--surface-container); }
+.device-settings-select:disabled { opacity: 0.6; cursor: not-allowed; }
+.device-settings-note { font-size: 11px; color: var(--on-surface-variant); }
+
+@media (max-width: 768px) {
+  .device-setting-btn { display: none; }
+  .device-settings-popover { display: none; }
+}
+
+/* ===========================
    SHARED: CALL GLASS PANEL (glassmorphism)
    =========================== */
 .call-glass-panel {
