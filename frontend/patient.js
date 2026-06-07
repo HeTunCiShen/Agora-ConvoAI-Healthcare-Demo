@@ -487,7 +487,7 @@
         return;
       }
       container.innerHTML = requestBtn + appointments.map(a => {
-        const dt = new Date(a.date_time).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const dt = UTILS.formatApptTime(a.date_time);
         const statusLabel = a.status === 'requested' ? '⏳ Requested' : a.status === 'confirmed' ? '✓ Confirmed' : '✗ Declined';
         const withLine = a.doctor_name
           ? `<div class="appt-with-doctor"><span class="label">With: </span>${escapeHtml(a.doctor_name)}</div>`
@@ -524,9 +524,13 @@
 
     const form = document.createElement('div');
     form.className = 'appt-form';
+    const todayStr = (() => { const d = new Date(); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; })();
     form.innerHTML = `
-      <label>Preferred date & time</label>
-      <input type="datetime-local" id="appt-datetime" />
+      <label>Preferred date</label>
+      <input type="date" id="appt-date" min="${todayStr}" value="${todayStr}" />
+      <label>Available time slot</label>
+      <select id="appt-slot"><option value="">Select a date first…</option></select>
+      <div id="appt-slot-note" style="font-size:11px;color:#9ca3af;margin:4px 0 8px;">8:00 AM–4:00 PM, 30-minute slots.</div>
       <label>Reason</label>
       <textarea id="appt-reason" rows="2" placeholder="e.g. Follow-up on medication"></textarea>
       <div class="form-actions">
@@ -536,26 +540,58 @@
     `;
     container.prepend(form);
 
+    const dateInput = form.querySelector('#appt-date');
+    const slotSelect = form.querySelector('#appt-slot');
+    const note = form.querySelector('#appt-slot-note');
+
+    const to12h = (hhmm) => {
+      const [h, m] = hhmm.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const hr = (h % 12) || 12;
+      return `${hr}:${String(m).padStart(2, '0')} ${ampm}`;
+    };
+
+    async function loadSlots() {
+      slotSelect.innerHTML = '<option value="">Loading…</option>';
+      try {
+        const { available } = await API.healthcare.getAvailability({ doctor_id: doctorId, date: dateInput.value });
+        if (!available || available.length === 0) {
+          slotSelect.innerHTML = '<option value="">No slots available this day</option>';
+          note.textContent = 'No open slots — try another date.';
+          return;
+        }
+        slotSelect.innerHTML = available.map(s => `<option value="${s}">${to12h(s)}</option>`).join('');
+        note.textContent = '8:00 AM–4:00 PM, 30-minute slots.';
+      } catch (e) {
+        slotSelect.innerHTML = '<option value="">Failed to load slots</option>';
+        console.error('[appt] availability load failed', e);
+      }
+    }
+    dateInput.addEventListener('change', loadSlots);
+    loadSlots();
+
     form.querySelector('#appt-submit').addEventListener('click', async () => {
-      const dateTime = form.querySelector('#appt-datetime').value;
+      const date = dateInput.value;
+      const slot = slotSelect.value;
       const reason = form.querySelector('#appt-reason').value;
-      if (!dateTime) return;
+      if (!date || !slot) return;
       try {
         await API.healthcare.createAppointment({
           patient_id: selectedProfile.id,
           doctor_id: doctorId,
-          date_time: new Date(dateTime).toISOString(),
+          date_time: `${date}T${slot}:00`,
           reason
         });
         await renderAppointmentsTab(doctorId);
         await loadDoctorCards();
       } catch (e) {
+        // 409/422 (slot just taken or invalid) — refresh availability and tell the user.
         console.error('Failed to create appointment', e);
+        note.textContent = 'That slot is no longer available — pick another.';
+        await loadSlots();
       }
     });
-    form.querySelector('#appt-cancel').addEventListener('click', () => {
-      form.remove();
-    });
+    form.querySelector('#appt-cancel').addEventListener('click', () => form.remove());
   }
 
   // ===========================
@@ -675,14 +711,18 @@
 
       // Inject current date/time so AI understands "tomorrow", "next Tuesday", etc.
       const now = new Date();
-      profileContext += `\n\nCurrent date and time: ${now.toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} (Australian time)`;
+      profileContext += `\n\nCurrent date and time (the user's local time): ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Treat every appointment time as this same local clock — do not convert timezones.`;
 
-      // Inject available doctors for appointment booking
+      // Inject available doctors + booking rules + each doctor's booked slots so
+      // the agent can steer the patient to open times. Authoritative validation
+      // happens post-call.
       if (allDoctors.length > 0) {
         profileContext += '\n\nAvailable doctors for appointment booking:\n' + allDoctors.map(d =>
           `- ${d.name} (${d.specialty || 'General'}, ${d.hospital || 'N/A'})`
         ).join('\n');
-        profileContext += '\nWhen the patient wants to book an appointment, help them choose a doctor, preferred date/time, and reason. Confirm the details verbally. Let them know the appointment request will be sent to the doctor after this call ends. Do not output any tags or special formatting — just speak naturally.';
+        profileContext += '\n\nAppointment booking rules: appointments are 30-minute slots from 8:00 AM to 4:00 PM (the last slot starts at 3:30 PM). Only offer times on the hour or half-hour. If the patient asks for a time that is outside 8:00 AM–4:00 PM or already booked (see "Doctor booked slots" below), tell them it is not available and offer that day\'s open times. The request is sent to the doctor after the call ends.';
+        profileContext += await buildDoctorBookedBlock();
+        profileContext += '\nConfirm the doctor, date/time, and reason verbally. Do not output any tags or special formatting — just speak naturally.';
       }
 
       let greetingMessage = `Hello ${selectedProfile.name}! I'm your AI health assistant. How can I help you today?`;
@@ -744,7 +784,7 @@
       const relevant = appts.filter(a => a.status !== 'declined');
       if (relevant.length > 0) {
         lines.push('Appointments: ' + relevant.map(a =>
-          `${new Date(a.date_time).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} with ${a.doctor_name || a.doctor_id} (${a.status})`
+          `${UTILS.formatApptTime(a.date_time)} with ${a.doctor_name || a.doctor_id} (${a.status})`
         ).join('; '));
       } else {
         lines.push('Appointments: None scheduled');
@@ -753,6 +793,33 @@
       lines.push('Appointments: None scheduled');
     }
     return lines.join('\n');
+  }
+
+  // Compact list of each doctor's booked slots for the next ~7 days so the agent
+  // can avoid them. Naive wall-clock; no timezone conversion.
+  async function buildDoctorBookedBlock() {
+    const horizonDays = 7;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const horizon = new Date(today); horizon.setDate(horizon.getDate() + horizonDays);
+    const inWindow = (dt) => {
+      const m = String(dt).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return false;
+      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+      return d >= today && d <= horizon;
+    };
+    const blocks = [];
+    for (const d of allDoctors) {
+      try {
+        const appts = await API.healthcare.listAppointments({ doctor_id: d.id });
+        const booked = appts
+          .filter(a => a.status !== 'declined' && inWindow(a.date_time))
+          .map(a => UTILS.formatApptTime(a.date_time));
+        if (booked.length) blocks.push(`- ${d.name}: ${booked.join('; ')}`);
+      } catch (_) { /* ignore — best effort */ }
+    }
+    return blocks.length
+      ? '\nDoctor booked slots (next 7 days, already taken — do NOT offer these):\n' + blocks.join('\n')
+      : '\nDoctor booked slots (next 7 days): none on file.';
   }
 
   async function stopCall() {
@@ -841,6 +908,8 @@
                   console.warn('[stopCall] skip duplicate appointment vs existing calendar:', appt);
                   continue;
                 }
+                // Server is authoritative: it rejects out-of-hours / conflicting
+                // slots (422/409). Those throw and are caught below — skip & move on.
                 await API.healthcare.createAppointment({
                   patient_id: profile.id,
                   doctor_id: doctor.id,
