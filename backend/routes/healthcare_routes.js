@@ -23,6 +23,7 @@ router.post('/summaries', controller.createSummary);
 router.post('/summarize', controller.generateSummary);
 router.get('/profile-summary/:patientId', controller.getProfileSummary);
 router.get('/appointments', controller.listAppointments);
+router.get('/availability', controller.getAvailability);
 router.post('/appointments', controller.createAppointment);
 router.put('/appointments/:id', controller.updateAppointment);
 router.get('/care-plans/:patientId', controller.getCarePlan);

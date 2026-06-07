@@ -547,11 +547,23 @@ CRITICAL — appointment_requests (separate from consultation_kind):
     }
   }
 
+  function getAvailability(req, res) {
+    const { doctor_id, date } = req.query;
+    if (!doctor_id || !date) {
+      return res.status(400).json({ error: 'doctor_id and date are required' });
+    }
+    res.json({
+      date,
+      available: getAvailableSlots(db, doctor_id, date),
+      booked: getBookedSlots(db, doctor_id, date)
+    });
+  }
+
   function sseStream(req, res) {
     sse.addClient(res);
   }
 
-  return { getProfile, listProfiles, listSummaries, createSummary, generateSummary, getProfileSummary, listAppointments, createAppointment, updateAppointment, getCarePlan, updateCarePlan, sseStream };
+  return { getProfile, listProfiles, listSummaries, createSummary, generateSummary, getProfileSummary, listAppointments, createAppointment, updateAppointment, getAvailability, getCarePlan, updateCarePlan, sseStream };
 }
 
 module.exports = { makeHealthcareController };

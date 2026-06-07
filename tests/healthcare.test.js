@@ -18,6 +18,7 @@ function makeApp() {
   app.get('/api/healthcare/profile-summary/:patientId', ctrl.getProfileSummary);
   app.get('/api/healthcare/appointments', ctrl.listAppointments);
   app.post('/api/healthcare/appointments', ctrl.createAppointment);
+  app.get('/api/healthcare/availability', ctrl.getAvailability);
   app.put('/api/healthcare/appointments/:id', ctrl.updateAppointment);
   app.get('/api/healthcare/care-plans/:patientId', ctrl.getCarePlan);
   app.put('/api/healthcare/care-plans/:id', ctrl.updateCarePlan);
@@ -331,6 +332,28 @@ describe('PUT /api/healthcare/appointments/:id', () => {
       .put('/api/healthcare/appointments/bad-id')
       .send({ status: 'confirmed' });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/healthcare/availability', () => {
+  test('returns available and booked slots for a doctor+date', async () => {
+    const app = makeApp();
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-27T09:00:00', reason: 'x'
+    });
+    const res = await request(app).get('/api/healthcare/availability?doctor_id=doctor-1&date=2026-04-27');
+    expect(res.status).toBe(200);
+    expect(res.body.date).toBe('2026-04-27');
+    expect(res.body.booked).toContain('09:00');
+    expect(res.body.available).not.toContain('09:00');
+    expect(res.body.available).toContain('08:00');
+  });
+
+  test('returns 400 without doctor_id or date', async () => {
+    const app = makeApp();
+    const res = await request(app).get('/api/healthcare/availability?doctor_id=doctor-1');
+    expect(res.status).toBe(400);
   });
 });
 
