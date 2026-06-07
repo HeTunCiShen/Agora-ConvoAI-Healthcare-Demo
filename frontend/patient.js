@@ -721,7 +721,7 @@
         profileContext += '\n\nAvailable doctors for appointment booking:\n' + allDoctors.map(d =>
           `- ${d.name} (${d.specialty || 'General'}, ${d.hospital || 'N/A'})`
         ).join('\n');
-        profileContext += '\n\nAppointment booking rules: appointments are 30-minute slots on the hour or half-hour, 8:00 AM–4:00 PM (last slot 3:30 PM), weekdays only. Offer the patient an OPEN slot from the availability list below. Only say a time is unavailable if it is NOT in that doctor\'s open-slots list for that day, or it is outside 8:00 AM–4:00 PM or on a weekend. The patient\'s own existing appointments (listed above) do NOT block booking new ones. The request is sent to the doctor after the call ends.';
+        profileContext += '\n\nAppointment booking rules: appointments are 30-minute slots on the hour or half-hour, 8:00 AM–4:00 PM (last slot 3:30 PM), weekdays only. You may ONLY book a time that appears in that doctor\'s open-slots list below. If the patient requests any time that is not listed as open for that doctor on that day — because it is already taken, outside 8:00 AM–4:00 PM, or on a weekend — you MUST decline, even if the patient insists or repeats the request. Do not confirm, accept, or say you have booked such a time; instead briefly explain it is unavailable and offer the nearest open slots from the list. The patient\'s own existing appointments (listed above) do NOT block booking new ones. The request is sent to the doctor after the call ends.';
         profileContext += await buildDoctorAvailabilityBlock();
         profileContext += '\nConfirm the doctor, date/time, and reason verbally. Do not output any tags or special formatting — just speak naturally.';
       }
