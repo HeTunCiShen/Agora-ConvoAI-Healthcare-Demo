@@ -533,11 +533,27 @@ CRITICAL — appointment_requests (separate from consultation_kind):
       const summary = JSON.parse(jsonStr);
       const doctorId = resolveSummaryDoctorId(call_type, summary, req.body);
       const consultation_kind = normalizeConsultationKind(call_type, summary.consultation_kind);
-      const appointment_requests = filterSpuriousAppointmentRequests(
+      const deduped = filterSpuriousAppointmentRequests(
         summary.appointment_requests,
         req.body.existing_appointments,
         req.body.care_team
       );
+      // Authoritative slot validation: drop out-of-hours, DB conflicts, and
+      // duplicate slots within this batch. Normalize survivors to naive time.
+      const appointment_requests = [];
+      const acceptedKeys = new Set();
+      for (const reqAppt of deduped) {
+        const norm = normalizeNaive(reqAppt.date_time);
+        if (!norm || !isValidSlot(norm)) continue;
+        const docId = resolveDoctorIdFromAppointmentName(reqAppt.doctor_name, req.body.care_team);
+        if (docId) {
+          if (findConflict(db, docId, norm)) continue;
+          const key = `${docId}|${parseNaive(norm).key}`;
+          if (acceptedKeys.has(key)) continue;
+          acceptedKeys.add(key);
+        }
+        appointment_requests.push({ ...reqAppt, date_time: norm });
+      }
       console.log(`[summarize] parsed summary ok, urgency=${summary.urgency}, doctor_id=${doctorId}, kind=${consultation_kind}, appt_req_out=${appointment_requests.length}`);
       const { related_doctor_id, doctor_id: _dropped, appointment_requests: _arIn, ...rest } = summary;
       res.json({ ...rest, call_type, doctor_id: doctorId, consultation_kind, appointment_requests });

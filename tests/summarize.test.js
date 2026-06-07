@@ -25,6 +25,7 @@ function makeApp() {
   app.post('/api/healthcare/summarize', ctrl.generateSummary);
   app.post('/api/healthcare/summaries', ctrl.createSummary);
   app.get('/api/healthcare/summaries', ctrl.listSummaries);
+  app.post('/api/healthcare/appointments', ctrl.createAppointment);
   return app;
 }
 
@@ -376,5 +377,73 @@ describe('Full flow: summarize → save → appears in feed', () => {
     const saved = feedRes.body.find(s => s.id === saveRes.body.id);
     expect(saved).toBeDefined();
     expect(saved.call_type).toBe('doctor-query');
+  });
+});
+
+describe('POST /api/healthcare/summarize — appointment slot validation', () => {
+  const careTeam = [{ id: 'doctor-1', name: 'Dr. James Williams', specialty: 'Cardiologist' }];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.LLM_URL = 'https://api.test/v1/chat/completions';
+    process.env.LLM_API_KEY = 'test-key';
+  });
+
+  function mockLLM(appointment_requests) {
+    axios.post.mockResolvedValueOnce({
+      data: { choices: [{ message: { content: JSON.stringify({
+        chief_complaint: 'booking', symptoms: [], vitals_mentioned: {}, medications_discussed: [],
+        ai_recommendation: 'ok', urgency: 'low', transcript_excerpt: 'x', suggested_action: 'y',
+        related_doctor_id: 'doctor-1', consultation_kind: 'appointment_booking', appointment_requests
+      }) } }] }
+    });
+  }
+
+  test('drops an out-of-hours request', async () => {
+    const app = makeApp();
+    mockLLM([{ doctor_name: 'Dr. James Williams', date_time: '2026-07-01T18:00:00', reason: 'late' }]);
+    const res = await request(app).post('/api/healthcare/summarize').send({
+      transcript: [{ role: 'user', content: 'book 6pm' }], call_type: 'patient',
+      care_team: careTeam, existing_appointments: []
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.appointment_requests).toHaveLength(0);
+  });
+
+  test('keeps a valid request and normalizes its date_time', async () => {
+    const app = makeApp();
+    mockLLM([{ doctor_name: 'Dr. James Williams', date_time: '2026-07-01T14:00:00.000Z', reason: 'review' }]);
+    const res = await request(app).post('/api/healthcare/summarize').send({
+      transcript: [{ role: 'user', content: 'book 2pm' }], call_type: 'patient',
+      care_team: careTeam, existing_appointments: []
+    });
+    expect(res.body.appointment_requests).toHaveLength(1);
+    expect(res.body.appointment_requests[0].date_time).toBe('2026-07-01T14:00:00');
+  });
+
+  test('drops a request that conflicts with an existing appointment', async () => {
+    const app = makeApp();
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1', date_time: '2026-07-02T10:00:00', reason: 'existing'
+    });
+    mockLLM([{ doctor_name: 'Dr. James Williams', date_time: '2026-07-02T10:00:00', reason: 'dup slot' }]);
+    const res = await request(app).post('/api/healthcare/summarize').send({
+      transcript: [{ role: 'user', content: 'book 10am' }], call_type: 'patient',
+      care_team: careTeam, existing_appointments: []
+    });
+    expect(res.body.appointment_requests).toHaveLength(0);
+  });
+
+  test('keeps only one when two requests target the same slot', async () => {
+    const app = makeApp();
+    mockLLM([
+      { doctor_name: 'Dr. James Williams', date_time: '2026-07-03T11:00:00', reason: 'a' },
+      { doctor_name: 'Dr. James Williams', date_time: '2026-07-03T11:00:00', reason: 'b' }
+    ]);
+    const res = await request(app).post('/api/healthcare/summarize').send({
+      transcript: [{ role: 'user', content: 'book 11am twice' }], call_type: 'patient',
+      care_team: careTeam, existing_appointments: []
+    });
+    expect(res.body.appointment_requests).toHaveLength(1);
   });
 });
