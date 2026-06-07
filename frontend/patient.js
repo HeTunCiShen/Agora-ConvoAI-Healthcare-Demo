@@ -713,15 +713,16 @@
       const now = new Date();
       profileContext += `\n\nCurrent date and time (the user's local time): ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Treat every appointment time as this same local clock — do not convert timezones.`;
 
-      // Inject available doctors + booking rules + each doctor's booked slots so
-      // the agent can steer the patient to open times. Authoritative validation
-      // happens post-call.
+      // Inject available doctors + booking rules + each doctor's OPEN slots
+      // (precomputed) so the agent reads availability directly instead of
+      // deriving it from a booked list (LLMs do that date math unreliably and
+      // over-refuse). Authoritative validation still happens post-call.
       if (allDoctors.length > 0) {
         profileContext += '\n\nAvailable doctors for appointment booking:\n' + allDoctors.map(d =>
           `- ${d.name} (${d.specialty || 'General'}, ${d.hospital || 'N/A'})`
         ).join('\n');
-        profileContext += '\n\nAppointment booking rules: appointments are 30-minute slots from 8:00 AM to 4:00 PM (the last slot starts at 3:30 PM). Only offer times on the hour or half-hour. If the patient asks for a time that is outside 8:00 AM–4:00 PM or already booked (see "Doctor booked slots" below), tell them it is not available and offer that day\'s open times. The request is sent to the doctor after the call ends.';
-        profileContext += await buildDoctorBookedBlock();
+        profileContext += '\n\nAppointment booking rules: appointments are 30-minute slots on the hour or half-hour, 8:00 AM–4:00 PM (last slot 3:30 PM), weekdays only. Offer the patient an OPEN slot from the availability list below. Only say a time is unavailable if it is NOT in that doctor\'s open-slots list for that day, or it is outside 8:00 AM–4:00 PM or on a weekend. The patient\'s own existing appointments (listed above) do NOT block booking new ones. The request is sent to the doctor after the call ends.';
+        profileContext += await buildDoctorAvailabilityBlock();
         profileContext += '\nConfirm the doctor, date/time, and reason verbally. Do not output any tags or special formatting — just speak naturally.';
       }
 
@@ -795,31 +796,52 @@
     return lines.join('\n');
   }
 
-  // Compact list of each doctor's booked slots for the next ~7 days so the agent
-  // can avoid them. Naive wall-clock; no timezone conversion.
-  async function buildDoctorBookedBlock() {
-    const horizonDays = 7;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const horizon = new Date(today); horizon.setDate(horizon.getDate() + horizonDays);
-    const inWindow = (dt) => {
-      const m = String(dt).match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (!m) return false;
-      const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-      return d >= today && d <= horizon;
-    };
-    const blocks = [];
-    for (const d of allDoctors) {
-      try {
-        const appts = await API.healthcare.listAppointments({ doctor_id: d.id });
-        const booked = appts
-          .filter(a => a.status !== 'declined' && inWindow(a.date_time))
-          .map(a => UTILS.formatApptTime(a.date_time));
-        if (booked.length) blocks.push(`- ${d.name}: ${booked.join('; ')}`);
-      } catch (_) { /* ignore — best effort */ }
+  // Precompute each doctor's OPEN slots for the next few business days and feed
+  // them to the agent directly. The agent reads availability instead of deriving
+  // it from a booked list (which it does unreliably, causing over-refusal).
+  // Naive wall-clock throughout; no timezone conversion.
+  async function buildDoctorAvailabilityBlock() {
+    const SLOTS = [];
+    for (let h = 8; h < 16; h++) for (let m = 0; m < 60; m += 30) {
+      SLOTS.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
     }
-    return blocks.length
-      ? '\nDoctor booked slots (next 7 days, already taken — do NOT offer these):\n' + blocks.join('\n')
-      : '\nDoctor booked slots (next 7 days): none on file.';
+    const to12h = (hhmm) => {
+      const [h, m] = hhmm.split(':').map(Number);
+      const ap = h >= 12 ? 'PM' : 'AM';
+      return `${(h % 12) || 12}:${String(m).padStart(2, '0')} ${ap}`;
+    };
+    const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const dayLabel = (d) => d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+
+    // Next 5 business days (skip weekends), starting today.
+    const days = [];
+    const cur = new Date(); cur.setHours(0, 0, 0, 0);
+    while (days.length < 5) {
+      if (cur.getDay() !== 0 && cur.getDay() !== 6) days.push(new Date(cur));
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    const lines = [];
+    for (const d of allDoctors) {
+      let appts = [];
+      try { appts = await API.healthcare.listAppointments({ doctor_id: d.id }); } catch (_) { /* best effort */ }
+      const bookedByDay = {};
+      for (const a of appts) {
+        if (a.status === 'declined') continue;
+        const m = String(a.date_time).match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+        if (!m) continue;
+        (bookedByDay[m[1]] = bookedByDay[m[1]] || new Set()).add(m[2]);
+      }
+      const dayParts = days.map((day) => {
+        const booked = bookedByDay[dateKey(day)] || new Set();
+        const open = SLOTS.filter(s => !booked.has(s));
+        if (open.length === SLOTS.length) return `${dayLabel(day)}: all open (8:00 AM–3:30 PM)`;
+        if (open.length === 0) return `${dayLabel(day)}: fully booked`;
+        return `${dayLabel(day)}: ${open.map(to12h).join(', ')}`;
+      });
+      lines.push(`${d.name} open slots:\n    ${dayParts.join('\n    ')}`);
+    }
+    return '\n\nEach doctor\'s OPEN 30-minute slots for the next 5 business days (offer the patient times from here; any time not listed for a day is taken or outside hours):\n' + lines.join('\n');
   }
 
   async function stopCall() {
