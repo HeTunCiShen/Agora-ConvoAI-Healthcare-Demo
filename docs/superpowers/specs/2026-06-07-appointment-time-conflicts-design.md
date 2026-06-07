@@ -112,13 +112,23 @@ frees it.
 
 ## Seed data — `seed.js`
 
-- **Mock call summaries**: move `created_at` to ~**2026-06-15/06-16** (recent
-  history). Assumes the event/demo date is on/after 2026-06-15.
-- **Mock appointments**: move `date_time` to **2026-06-16 and later**, each on a
-  **valid slot** (`:00`/`:30`, 08:00–15:30), naive format (no `Z`), with **no two
-  appointments sharing a doctor+slot**. Keep the existing status mix
-  (confirmed/requested). Note: `patient-2` has two appointments with `doctor-2` —
-  they must use different slots/days.
+This is now a **permanent/recurring demo**, and the maintainer regularly has to
+re-date the seed history. So seed dates are **computed relative to the
+seed-run date** instead of hardcoded — delete `healthcare.db` and re-seed and the
+data is always "current" with no manual edits.
+
+- Add small date helpers in `seed.js` (naive wall-clock, no `Z`):
+  - `daysAgo(n, 'HH:MM')` → `YYYY-MM-DDThh:mm:00` n days before today.
+  - `nextBusinessSlot(offsetDays, 'HH:MM')` → a valid slot `offsetDays` ahead,
+    skipping weekends, on a `:00`/`:30` start within 08:00–15:30.
+- **Mock call summaries** (`created_at`): recent past, e.g. `daysAgo(5..15)`.
+  These remain plausibly historical regardless of when the demo runs.
+- **Mock appointments** (`date_time`): upcoming, e.g. `nextBusinessSlot(2..10)`,
+  each a **valid slot**, naive format, with **no two sharing a doctor+slot**.
+  Keep the existing status mix (confirmed/requested). `patient-2` has two
+  appointments with `doctor-2` — they must use different slots/days.
+- Seed must remain idempotent for a fresh DB: a delete + re-seed regenerates
+  current-relative dates (appointments already use `INSERT OR REPLACE`).
 
 ## Testing
 
