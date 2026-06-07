@@ -101,6 +101,8 @@ const API = {
         API.request(`/healthcare/profile-summary/${patientId}`),
       listAppointments: (params) =>
         API.request(`/healthcare/appointments${params ? '?' + new URLSearchParams(params) : ''}`),
+      getAvailability: ({ doctor_id, date }) =>
+        API.request(`/healthcare/availability?doctor_id=${encodeURIComponent(doctor_id)}&date=${encodeURIComponent(date)}`),
       createAppointment: (data) =>
         API.request('/healthcare/appointments', { method: 'POST', body: JSON.stringify(data) }),
       updateAppointment: (id, data) =>
@@ -160,10 +162,27 @@ const UTILS = {
     },
 
     formatTime: (date = new Date()) => {
-        return date.toLocaleTimeString([], { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        return date.toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit'
         });
+    },
+
+    /**
+     * Format a naive wall-clock appointment time WITHOUT timezone conversion.
+     * Input: "YYYY-MM-DDTHH:MM[:SS][Z]" -> "Jun 16, 2026 · 2:00 PM".
+     * Reads the wall-clock digits directly so every viewer sees the same label.
+     */
+    formatApptTime: (dt) => {
+        if (typeof dt !== 'string') return '';
+        const m = dt.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+        if (!m) return dt;
+        const [, y, mo, d, hh, mm] = m;
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let h = Number(hh);
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        h = h % 12; if (h === 0) h = 12;
+        return `${months[Number(mo) - 1]} ${Number(d)}, ${y} · ${h}:${mm} ${ampm}`;
     },
 
     showToast: (message, type = 'info') => {
