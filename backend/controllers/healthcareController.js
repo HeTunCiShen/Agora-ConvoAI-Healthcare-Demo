@@ -1,6 +1,7 @@
 // backend/controllers/healthcareController.js
 const { randomUUID } = require('crypto');
 const axios = require('axios');
+const { normalizeNaive, isValidSlot, findConflict, getAvailableSlots, getBookedSlots, enumerateSlots, parseNaive } = require('../lib/slots');
 
 const CONSULTATION_KINDS = new Set([
   'general_consulting',
@@ -360,10 +361,26 @@ Return ONLY the summary text, no JSON, no markdown, no headers.`;
   }
 
   function createAppointment(req, res) {
-    const { patient_id, doctor_id, date_time, reason } = req.body;
+    const { patient_id, doctor_id, reason } = req.body;
+    const date_time = normalizeNaive(req.body.date_time);
 
     if (!patient_id || !doctor_id || !date_time) {
       return res.status(400).json({ error: 'patient_id, doctor_id, and date_time are required' });
+    }
+    if (!isValidSlot(date_time)) {
+      return res.status(422).json({
+        error: 'Appointments must be a 30-minute slot between 8:00 AM and 4:00 PM',
+        reason: 'out_of_hours'
+      });
+    }
+    const clash = findConflict(db, doctor_id, date_time);
+    if (clash) {
+      const day = parseNaive(date_time).date;
+      return res.status(409).json({
+        error: 'That time slot is already booked',
+        reason: 'conflict',
+        available: getAvailableSlots(db, doctor_id, day)
+      });
     }
 
     const id = randomUUID();
@@ -375,9 +392,7 @@ Return ONLY the summary text, no JSON, no markdown, no headers.`;
     `).run(id, patient_id, doctor_id, date_time, reason || '', now, now);
 
     const appointment = db.prepare('SELECT * FROM appointments WHERE id = ?').get(id);
-
     sse.broadcast('new_appointment', { appointment });
-
     res.status(201).json(appointment);
   }
 

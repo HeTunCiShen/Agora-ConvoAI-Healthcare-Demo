@@ -195,6 +195,48 @@ describe('POST /api/healthcare/appointments', () => {
     });
     expect(res.status).toBe(400);
   });
+
+  test('stores date_time timezone-naive (no Z)', async () => {
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-4',
+      date_time: '2026-04-22T09:00:00.000Z', reason: 'x'
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.date_time).toBe('2026-04-22T09:00:00');
+  });
+
+  test('returns 422 for out-of-hours time', async () => {
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-22T17:00:00', reason: 'late'
+    });
+    expect(res.status).toBe(422);
+    expect(res.body.reason).toBe('out_of_hours');
+  });
+
+  test('returns 422 for unaligned (non :00/:30) time', async () => {
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-22T10:15:00', reason: 'odd'
+    });
+    expect(res.status).toBe(422);
+  });
+
+  test('returns 409 + available list when slot already taken', async () => {
+    await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-1', doctor_id: 'doctor-1',
+      date_time: '2026-04-25T13:00:00', reason: 'first'
+    });
+    const res = await request(app).post('/api/healthcare/appointments').send({
+      patient_id: 'patient-2', doctor_id: 'doctor-1',
+      date_time: '2026-04-25T13:00:00', reason: 'second'
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.reason).toBe('conflict');
+    expect(Array.isArray(res.body.available)).toBe(true);
+    expect(res.body.available).not.toContain('13:00');
+    expect(res.body.available).toContain('13:30');
+  });
 });
 
 describe('GET /api/healthcare/appointments', () => {
@@ -275,7 +317,7 @@ describe('PUT /api/healthcare/appointments/:id', () => {
   test('declines an appointment', async () => {
     const create = await request(app).post('/api/healthcare/appointments').send({
       patient_id: 'patient-1', doctor_id: 'doctor-1',
-      date_time: '2026-04-22T10:00:00.000Z', reason: 'Check-up'
+      date_time: '2026-04-22T11:00:00.000Z', reason: 'Check-up'
     });
     const res = await request(app)
       .put(`/api/healthcare/appointments/${create.body.id}`)
