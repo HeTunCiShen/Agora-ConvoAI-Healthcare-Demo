@@ -488,7 +488,7 @@
     } catch (_) {}
 
     const now = new Date();
-    profileContext += `\n\nCurrent date and time: ${now.toLocaleDateString('en-AU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} (Australian time)`;
+    profileContext += `\n\nCurrent date and time (the user's local time): ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Treat every appointment time as this same local clock — do not convert timezones.`;
 
     sipChannel = UTILS.generateChannelName();
     let sipUid = null;
@@ -795,7 +795,7 @@
         return;
       }
       container.innerHTML = appointments.map(a => {
-        const dt = new Date(a.date_time).toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const dt = UTILS.formatApptTime(a.date_time);
         const statusLabel = a.status === 'requested' ? '⏳ Appointment Request' : a.status === 'confirmed' ? '✓ Confirmed' : '✗ Declined';
         const canActOn = a.status === 'requested' && a.doctor_id === selectedProfile.id;
         const actions = canActOn ? `
@@ -978,6 +978,9 @@
           profileContext += '\n\nPatient profiles (consolidated from prior calls):\n' + profiles.join('\n\n');
         }
       } catch (_) {}
+
+      const now = new Date();
+      profileContext += `\n\nCurrent date and time (the user's local time): ${now.toLocaleDateString([], { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}, ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Treat every appointment time as this same local clock — do not convert timezones.`;
 
       rtmClient = new AgoraRTM.RTM(agoraChannelInfo.appId, agoraUserUID.toString());
       rtmClient.addEventListener('message', handleRTMMessage);
