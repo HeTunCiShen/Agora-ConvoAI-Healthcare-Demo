@@ -1,4 +1,26 @@
 // backend/db/seed.js
+
+// --- Relative naive wall-clock date helpers (no timezone) -------------------
+// Seed dates are computed relative to the seed-run date so a delete + re-seed
+// always produces current-looking demo data (no manual re-dating).
+const _pad2 = (n) => String(n).padStart(2, '0');
+function naiveAt(d, hh, mm) {
+  return `${d.getFullYear()}-${_pad2(d.getMonth() + 1)}-${_pad2(d.getDate())}T${_pad2(hh)}:${_pad2(mm)}:00`;
+}
+/** A naive timestamp n days before today at hh:mm (for historical records). */
+function daysAgo(n, hh, mm) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return naiveAt(d, hh, mm);
+}
+/** A valid future slot offsetDays ahead (skipping weekends) at hh:mm. */
+function nextBusinessSlot(offsetDays, hh, mm) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  return naiveAt(d, hh, mm);
+}
+
 const PROFILES = [
   {
     id: 'patient-1', role: 'patient', name: 'Sarah Chen', avatar: 'SC', age: 34,
@@ -115,7 +137,7 @@ const MOCK_CALL_SUMMARIES = [
       { role: 'user', content: 'My home cuff reads high after dinner most nights.' },
       { role: 'assistant', content: 'Let us review timing of doses and sodium intake.' }
     ],
-    created_at: '2026-04-02T22:30:00.000Z',
+    created_at: daysAgo(14, 19, 30),
     doctor_id: 'doctor-1',
     consultation_kind: 'condition_followup'
   },
@@ -135,7 +157,7 @@ const MOCK_CALL_SUMMARIES = [
       { role: 'user', content: 'I get woozy for a few seconds when I stand up fast.' },
       { role: 'assistant', content: 'That can happen with beta-blockers. Try ankle pumps before standing.' }
     ],
-    created_at: '2026-04-12T14:05:00.000Z',
+    created_at: daysAgo(11, 9, 5),
     doctor_id: 'doctor-3',
     consultation_kind: 'general_consulting'
   },
@@ -155,7 +177,7 @@ const MOCK_CALL_SUMMARIES = [
       { role: 'user', content: 'The knee puffs up by dinner but looks normal in the morning.' },
       { role: 'assistant', content: 'That pattern is common. Ice 15 minutes after walks.' }
     ],
-    created_at: '2026-04-08T01:20:00.000Z',
+    created_at: daysAgo(9, 11, 20),
     doctor_id: 'doctor-2',
     consultation_kind: 'post_op_call'
   },
@@ -175,7 +197,7 @@ const MOCK_CALL_SUMMARIES = [
       { role: 'user', content: 'I wake up every few hours because of the knee.' },
       { role: 'assistant', content: 'We can time your pain relief before bedtime.' }
     ],
-    created_at: '2026-04-15T10:45:00.000Z',
+    created_at: daysAgo(6, 20, 45),
     doctor_id: 'doctor-2',
     consultation_kind: 'general_consulting'
   }
@@ -186,41 +208,41 @@ const MOCK_APPOINTMENTS = [
     id: 'seed-appt-p1-1',
     patient_id: 'patient-1',
     doctor_id: 'doctor-1',
-    date_time: '2026-05-28T10:00:00.000Z',
+    date_time: nextBusinessSlot(3, 10, 0),
     status: 'confirmed',
     reason: 'Hypertension follow-up and home BP review',
-    created_at: '2026-04-01T08:00:00.000Z',
-    updated_at: '2026-04-01T08:00:00.000Z'
+    created_at: daysAgo(20, 8, 0),
+    updated_at: daysAgo(20, 8, 0)
   },
   {
     id: 'seed-appt-p1-2',
     patient_id: 'patient-1',
     doctor_id: 'doctor-3',
-    date_time: '2026-06-06T14:30:00.000Z',
+    date_time: nextBusinessSlot(5, 14, 30),
     status: 'requested',
     reason: 'Annual GP check-up and medication review',
-    created_at: '2026-04-10T11:00:00.000Z',
-    updated_at: '2026-04-10T11:00:00.000Z'
+    created_at: daysAgo(12, 11, 0),
+    updated_at: daysAgo(12, 11, 0)
   },
   {
     id: 'seed-appt-p2-1',
     patient_id: 'patient-2',
     doctor_id: 'doctor-2',
-    date_time: '2026-05-22T11:00:00.000Z',
+    date_time: nextBusinessSlot(4, 11, 0),
     status: 'confirmed',
     reason: 'Post-operative knee review and wound check',
-    created_at: '2026-04-03T09:30:00.000Z',
-    updated_at: '2026-04-03T09:30:00.000Z'
+    created_at: daysAgo(18, 9, 30),
+    updated_at: daysAgo(18, 9, 30)
   },
   {
     id: 'seed-appt-p2-2',
     patient_id: 'patient-2',
     doctor_id: 'doctor-2',
-    date_time: '2026-06-01T09:30:00.000Z',
+    date_time: nextBusinessSlot(6, 9, 30),
     status: 'requested',
     reason: 'Physiotherapy progress review before return to work',
-    created_at: '2026-04-11T16:20:00.000Z',
-    updated_at: '2026-04-11T16:20:00.000Z'
+    created_at: daysAgo(10, 16, 20),
+    updated_at: daysAgo(10, 16, 20)
   }
 ];
 

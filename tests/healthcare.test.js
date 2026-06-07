@@ -355,6 +355,16 @@ describe('GET /api/healthcare/availability', () => {
     const res = await request(app).get('/api/healthcare/availability?doctor_id=doctor-1');
     expect(res.status).toBe(400);
   });
+
+  test('seeded appointments are naive wall-clock and on valid slots', async () => {
+    const app = makeApp();
+    const res = await request(app).get('/api/healthcare/appointments');
+    const { isValidSlot } = require('../backend/lib/slots');
+    for (const a of res.body) {
+      expect(a.date_time).not.toMatch(/Z$/);          // naive, no UTC suffix
+      expect(isValidSlot(a.date_time)).toBe(true);     // 08:00–15:30, :00/:30
+    }
+  });
 });
 
 describe('PUT /api/healthcare/care-plans/:id', () => {
